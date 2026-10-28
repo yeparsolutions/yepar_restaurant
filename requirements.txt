@@ -1,0 +1,9 @@
+# ============================================================
+# YEPAR RESTAURANT — backend/requirements.txt
+# Dependencias del backend. Uso: pip install -r requirements.txt
+# Se mantienen las mismas versiones que Carora (YeparStock).
+# ============================================================
+
+sqlalchemy==2.0.41
+psycopg2-binary==2.9.11   # conexión a PostgreSQL (producción)
+pytest==9.1.1             # pruebas

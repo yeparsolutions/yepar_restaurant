@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+
+# Base de datos local de desarrollo
+*.db
+
+# Variables de entorno y secretos
+.env
+*.pem
+*.pfx
+
+# Editor / sistema
+.vscode/
+.idea/
+.DS_Store
