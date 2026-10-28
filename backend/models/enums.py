@@ -82,6 +82,14 @@ class MotivoMerma(str, enum.Enum):
     cancelacion_en_preparacion  = "cancelacion_en_preparacion"   # plato cancelado cuando ya se estaba cocinando
 
 
+# ── Reservas de stock ────────────────────────────────────────
+class EstadoReserva(str, enum.Enum):
+    activa     = "activa"        # pedido enviado a cocina, aún no listo
+    consumida  = "consumida"     # cocina marcó "listo": salió del stock físico
+    liberada   = "liberada"      # se canceló antes de empezar a cocinar
+    merma      = "merma"         # se canceló ya en preparación: se pierde
+
+
 # ── Usuarios ─────────────────────────────────────────────────
 class RolUsuario(str, enum.Enum):
     administrador = "administrador"
