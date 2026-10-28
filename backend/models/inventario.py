@@ -37,7 +37,7 @@ from sqlalchemy import (Boolean, CheckConstraint, DateTime, ForeignKey, Index,
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from database import Base
-from models.enums import (TIPOS_CON_RECETA, TIPOS_VENDIBLES, FamiliaUnidad,
+from models.enums import (EstadoReserva, TIPOS_CON_RECETA, TIPOS_VENDIBLES, FamiliaUnidad,
                           MotivoMerma, TipoItem, TipoMovimientoStock,
                           columna_enum)
 
@@ -377,3 +377,38 @@ class LoteProduccion(Base):
 
     item:   Mapped["Item"]   = relationship()
     receta: Mapped["Receta"] = relationship()
+
+
+# ============================================================
+# TABLA: reservas_stock
+# Lo que un pedido enviado a cocina "aparta" de la bodega.
+#
+# Analogía: la etiqueta "RESERVADO" que el cocinero pega en los
+# ingredientes de una comanda: siguen en la bodega (stock físico),
+# pero nadie más puede contar con ellos. Cuando el plato sale, la
+# etiqueta se retira y el ingrediente se descuenta de verdad.
+#
+# Una fila por ingrediente de cada línea de pedido. La referencia
+# apunta a la línea del pedido (las tablas de pedidos vienen después).
+# ============================================================
+class ReservaStock(Base):
+    __tablename__ = "reservas_stock"
+    __table_args__ = (
+        CheckConstraint("cantidad > 0", name="ck_reserva_cantidad_positiva"),
+        Index("ix_reserva_referencia", "referencia_tipo", "referencia_id"),
+    )
+
+    id:          Mapped[int] = mapped_column(primary_key=True)
+    empresa_id:  Mapped[int] = mapped_column(ForeignKey("empresas.id", ondelete="CASCADE"), index=True)
+    sucursal_id: Mapped[int] = mapped_column(ForeignKey("sucursales.id", ondelete="CASCADE"), index=True)
+    item_id:     Mapped[int] = mapped_column(ForeignKey("items.id"), index=True)   # el ingrediente apartado
+
+    referencia_tipo: Mapped[str] = mapped_column(String(30))     # ej. "linea_pedido"
+    referencia_id:   Mapped[str] = mapped_column(String(64))
+
+    cantidad: Mapped[Decimal]       = mapped_column(CANTIDAD)    # en unidad base del ingrediente
+    estado:   Mapped[EstadoReserva] = mapped_column(columna_enum(EstadoReserva), default=EstadoReserva.activa)
+    creado_en:  Mapped[datetime]           = mapped_column(DateTime(timezone=True), server_default=func.now())
+    cerrado_en: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+
+    item: Mapped["Item"] = relationship()
