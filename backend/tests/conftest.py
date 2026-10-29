@@ -13,7 +13,7 @@ from sqlalchemy.pool import StaticPool
 
 import models  # noqa: F401  (registra todos los modelos antes de crear tablas)
 from database import Base
-from models import Empresa, Item, Sucursal, TipoItem
+from models import Empresa, Item, RolUsuario, Sucursal, TipoItem, Usuario, UsuarioRol
 from semilla import sembrar_unidades
 
 
@@ -68,4 +68,17 @@ def nuevo_item(db):
         db.add(item)
         db.commit()
         return item
+    return _crear
+
+
+@pytest.fixture()
+def nuevo_usuario(db):
+    """Fábrica de usuarios: nuevo_usuario(empresa, 'Ana', roles=(RolUsuario.mesero,))."""
+    def _crear(empresa, nombre, roles=(RolUsuario.mesero,), **extra):
+        usuario = Usuario(empresa_id=empresa.id, nombre=nombre, username=nombre.lower().replace(" ", "."),
+                          password_hash="x", **extra)
+        usuario.roles = [UsuarioRol(rol=r) for r in roles]
+        db.add(usuario)
+        db.commit()
+        return usuario
     return _crear
