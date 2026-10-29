@@ -107,6 +107,23 @@ class EstadoLinea(str, enum.Enum):
     cancelada      = "cancelada"
 
 
+# ── Caja y cobro ─────────────────────────────────────────────
+class MedioPago(str, enum.Enum):
+    efectivo      = "efectivo"        # se paga en la caja (el mesero no maneja efectivo)
+    tarjeta       = "tarjeta"         # terminal portátil en la mesa; exige terminal y número de operación
+    transferencia = "transferencia"   # exige número de operación
+
+
+class EstadoTurno(str, enum.Enum):
+    abierto = "abierto"
+    cerrado = "cerrado"
+
+
+class ModoPropina(str, enum.Enum):
+    por_mesa = "por_mesa"             # la propina de cada mesa es de su mesero
+    grupal   = "grupal"               # va a un fondo común que se reparte entre el equipo
+
+
 # ── Usuarios ─────────────────────────────────────────────────
 class RolUsuario(str, enum.Enum):
     administrador = "administrador"

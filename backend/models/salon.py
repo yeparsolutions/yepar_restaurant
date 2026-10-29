@@ -80,6 +80,7 @@ class Pedido(Base):
         Index("uq_pedido_mesa_abierta", "mesa_id", unique=True,
               postgresql_where=text(_ESTADOS_ABIERTOS), sqlite_where=text(_ESTADOS_ABIERTOS)),
         CheckConstraint("comensales IS NULL OR comensales > 0", name="ck_pedido_comensales_positivo"),
+        CheckConstraint("descuento >= 0 AND propina >= 0", name="ck_pedido_descuento_propina_no_negativos"),
     )
 
     id:          Mapped[str] = mapped_column(String(36), primary_key=True, default=nuevo_uuid)
@@ -90,6 +91,11 @@ class Pedido(Base):
 
     estado:     Mapped[EstadoPedido] = mapped_column(columna_enum(EstadoPedido), default=EstadoPedido.abierto)
     comensales: Mapped[Optional[int]] = mapped_column(Integer)
+
+    # Cobro: el descuento lo aplica el cajero (con su tope) y la propina la anota el mesero al pedir la cuenta.
+    descuento:        Mapped[Decimal] = mapped_column(DINERO, default=Decimal("0"), server_default="0")
+    descuento_por_id: Mapped[Optional[int]] = mapped_column(ForeignKey("usuarios.id", ondelete="SET NULL"))
+    propina:          Mapped[Decimal] = mapped_column(DINERO, default=Decimal("0"), server_default="0")
 
     abierto_en:        Mapped[datetime]           = mapped_column(DateTime(timezone=True), server_default=func.now())
     cuenta_pedida_en:  Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
