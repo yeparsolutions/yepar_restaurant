@@ -23,23 +23,6 @@ from servicios.pedidos import (abrir_pedido, cancelar_linea, enviar_pedido, pedi
 D = Decimal
 
 
-@pytest.fixture()
-def cobro(db, salon, nuevo_usuario):
-    """Salón + cajera (tope de descuento 10%), administrador, chef, una caja y un terminal."""
-    s = salon
-    e, suc = s["empresa"], s["sucursal"]
-    s["cata"] = nuevo_usuario(e, "Cata", roles=(RolUsuario.cajero,), descuento_max_pct=D("10"))
-    s["otra_cajera"] = nuevo_usuario(e, "Dani", roles=(RolUsuario.cajero,))
-    s["admin"] = nuevo_usuario(e, "Admin", roles=(RolUsuario.administrador,))
-    s["chef"] = nuevo_usuario(e, "Chef", roles=(RolUsuario.cocinero,), estacion=EstacionCocina.cocina)
-    s["barman"] = nuevo_usuario(e, "Barman", roles=(RolUsuario.cocinero,), estacion=EstacionCocina.barra)
-    s["caja"] = crear_caja(db, empresa_id=e.id, sucursal_id=suc.id, nombre="Caja 1")
-    s["caja2"] = crear_caja(db, empresa_id=e.id, sucursal_id=suc.id, nombre="Caja 2")
-    s["terminal"] = crear_terminal(db, empresa_id=e.id, sucursal_id=suc.id, nombre="Terminal 1")
-    db.commit()
-    return s
-
-
 def cuenta_pedida(db, s, mesa="m1", entregar=True):
     """Mesa con una hamburguesa + extra tocineta ($7.500) y una cola ($1.500) = $9.000, con la cuenta pedida."""
     e = s["empresa"].id

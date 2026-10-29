@@ -27,7 +27,7 @@ from sqlalchemy import (CheckConstraint, DateTime, ForeignKey, Index, Numeric, S
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from database import Base
-from models.enums import EstadoTurno, MedioPago, ModoPropina, columna_enum
+from models.enums import EstadoPropina, EstadoTurno, MedioPago, ModoPropina, columna_enum
 
 DINERO = Numeric(16, 2)
 _TURNO_ABIERTO = "estado = 'abierto'"
@@ -131,3 +131,29 @@ class Pago(Base):
     @property
     def vuelto(self) -> Decimal:
         return (self.recibido - self.monto) if self.recibido is not None else Decimal("0")
+
+
+class PropinaPorEntregar(Base):
+    """
+    El LIBRO DE PROPINAS. Cada mesa cobrada con propina deja una fila:
+      - modo por mesa: va a nombre del mesero de la mesa.
+      - modo grupal:   va al fondo común (mesero_id vacío) hasta que se reparta.
+    El dinero lo recibe el restaurante (efectivo o tarjeta), así que este libro
+    registra lo que se le debe a cada persona hasta que se le entrega.
+    """
+    __tablename__ = "propinas"
+    __table_args__ = (CheckConstraint("monto > 0", name="ck_propina_monto_positivo"),)
+
+    id:          Mapped[int] = mapped_column(primary_key=True)
+    empresa_id:  Mapped[int] = mapped_column(ForeignKey("empresas.id", ondelete="CASCADE"), index=True)
+    sucursal_id: Mapped[int] = mapped_column(ForeignKey("sucursales.id", ondelete="CASCADE"), index=True)
+    pedido_id:   Mapped[Optional[str]] = mapped_column(ForeignKey("pedidos.id"), index=True)   # vacío en lo repartido del fondo
+    mesero_id:   Mapped[Optional[int]] = mapped_column(ForeignKey("usuarios.id", ondelete="SET NULL"), index=True)
+
+    modo:   Mapped[ModoPropina]   = mapped_column(columna_enum(ModoPropina))
+    monto:  Mapped[Decimal]       = mapped_column(DINERO)
+    estado: Mapped[EstadoPropina] = mapped_column(columna_enum(EstadoPropina), default=EstadoPropina.pendiente)
+
+    creado_en:      Mapped[datetime]           = mapped_column(DateTime(timezone=True), server_default=func.now())
+    entregada_en:   Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    entregada_por_id: Mapped[Optional[int]]    = mapped_column(ForeignKey("usuarios.id", ondelete="SET NULL"))
