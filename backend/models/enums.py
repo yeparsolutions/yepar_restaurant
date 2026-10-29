@@ -124,6 +124,12 @@ class ModoPropina(str, enum.Enum):
     grupal   = "grupal"               # va a un fondo común que se reparte entre el equipo
 
 
+class EstadoPropina(str, enum.Enum):
+    pendiente = "pendiente"           # el restaurante la tiene y aún no se la entrega a nadie
+    entregada = "entregada"           # ya se entregó al mesero
+    repartida = "repartida"           # (fondo grupal) ya se repartió entre el equipo
+
+
 # ── Usuarios ─────────────────────────────────────────────────
 class RolUsuario(str, enum.Enum):
     administrador = "administrador"

@@ -4,19 +4,20 @@
 # registre antes de crear las tablas (Base.metadata.create_all).
 # ============================================================
 
-from models.enums import (EstacionCocina, EstadoTurno, MedioPago, ModoPropina, EstadoLinea, EstadoPedido, EstadoReserva, FamiliaUnidad, MotivoMerma,
+from models.enums import (EstacionCocina, EstadoPropina, EstadoTurno, MedioPago, ModoPropina, EstadoLinea, EstadoPedido, EstadoReserva, FamiliaUnidad, MotivoMerma,
                           RolUsuario, TipoItem, TipoMovimientoStock)
 from models.inventario import (CategoriaItem, Extra, ExtraPlato, Item,
                                ItemPresentacion, LoteProduccion,
                                MovimientoStock, Receta, RecetaLinea,
                                ReservaStock, StockSucursal, Unidad)
-from models.caja import Caja, ConfiguracionCobro, Pago, TerminalPago, TurnoCaja
+from models.caja import (Caja, ConfiguracionCobro, Pago, PropinaPorEntregar, TerminalPago,
+                         TurnoCaja)
 from models.salon import (LineaExtra, LineaPedido, LineaQuitado, Mesa, Pedido,
                           TraspasoMesero)
 from models.tenant import Empresa, Sucursal, Usuario, UsuarioRol
 
 __all__ = [
-    "EstacionCocina", "EstadoTurno", "MedioPago", "ModoPropina", "Caja", "ConfiguracionCobro", "Pago",
+    "EstacionCocina", "EstadoPropina", "PropinaPorEntregar", "EstadoTurno", "MedioPago", "ModoPropina", "Caja", "ConfiguracionCobro", "Pago",
     "TerminalPago", "TurnoCaja", "EstadoLinea", "EstadoPedido", "LineaExtra", "LineaPedido", "LineaQuitado",
     "Mesa", "Pedido", "TraspasoMesero", "EstadoReserva", "ReservaStock", "FamiliaUnidad", "MotivoMerma", "RolUsuario", "TipoItem",
     "TipoMovimientoStock",

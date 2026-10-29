@@ -25,6 +25,7 @@ from models import (ConfiguracionCobro, EstadoLinea, EstadoPedido, MedioPago, Mo
                     Pago, Pedido, RolUsuario, TerminalPago)
 from servicios.caja import _dinero, cargar_usuario, tiene_rol, turno_abierto_de
 from servicios.pedidos import cargar_pedido
+from servicios.propinas import registrar_propina_de_pedido
 
 CERO = Decimal("0")
 CENTAVO = Decimal("0.01")
@@ -225,5 +226,6 @@ def registrar_pago(
     if cuenta.pendiente - monto == 0:
         pedido.estado = EstadoPedido.cerrado
         pedido.cerrado_en = _ahora()
+        registrar_propina_de_pedido(db, pedido, obtener_configuracion(db, empresa_id).propina_modo)
         db.flush()
     return pago
