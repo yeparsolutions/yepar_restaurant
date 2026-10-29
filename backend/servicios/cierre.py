@@ -19,7 +19,7 @@ from typing import Optional
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from errores import ErrorNegocio
+from errores import ErrorNegocio, ErrorNoEncontrado
 from models import (EstadoPedido, EstadoTurno, MedioPago, Pago, Pedido, TerminalPago,
                     TurnoCaja)
 from servicios.cobro import calcular_cuenta
@@ -59,10 +59,10 @@ def cuadre_terminal(db: Session, *, empresa_id: int, terminal_id: int, desde: da
     """
     terminal = db.get(TerminalPago, terminal_id)
     if terminal is None or terminal.empresa_id != empresa_id:
-        raise ErrorNegocio("El terminal no existe.")
+        raise ErrorNoEncontrado("El terminal no existe.")
     pagos = (db.query(Pago).filter(Pago.terminal_id == terminal.id, Pago.medio == MedioPago.tarjeta,
                                    Pago.creado_en >= desde, Pago.creado_en < hasta)
-             .order_by(Pago.creado_en, Pago.id).all())
+             .order_by(Pago.creado_en, Pago.numero_operacion).all())
     total = sum((p.monto for p in pagos), CERO).quantize(CENTAVO)
     cuadre = CuadreTerminal(terminal_id=terminal.id, nombre=terminal.nombre, cantidad=len(pagos),
                             total_registrado=total,

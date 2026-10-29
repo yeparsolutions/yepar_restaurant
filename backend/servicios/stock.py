@@ -16,7 +16,7 @@ from typing import Optional
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from errores import ErrorNegocio
+from errores import ErrorNegocio, ErrorNoEncontrado
 from models import (Item, MotivoMerma, MovimientoStock, StockSucursal,
                     Sucursal, TipoMovimientoStock)
 from unidades import a_decimal, redondear_cantidad
@@ -39,7 +39,7 @@ def cargar_item(db: Session, empresa_id: int, item_id: int) -> Item:
     """
     item = db.get(Item, item_id)
     if item is None or item.empresa_id != empresa_id:
-        raise ErrorNegocio(f"El ítem {item_id} no existe.")
+        raise ErrorNoEncontrado(f"El ítem {item_id} no existe.")
     return item
 
 
@@ -47,7 +47,7 @@ def validar_sucursal(db: Session, empresa_id: int, sucursal_id: int) -> Sucursal
     """Verifica que la sucursal exista y sea de esta empresa."""
     sucursal = db.get(Sucursal, sucursal_id)
     if sucursal is None or sucursal.empresa_id != empresa_id:
-        raise ErrorNegocio(f"La sucursal {sucursal_id} no existe.")
+        raise ErrorNoEncontrado(f"La sucursal {sucursal_id} no existe.")
     return sucursal
 
 

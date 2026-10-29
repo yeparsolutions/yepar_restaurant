@@ -4,6 +4,14 @@
 # Se mantienen las mismas versiones que Carora (YeparStock).
 # ============================================================
 
+fastapi==0.115.12
+uvicorn==0.40.0
+python-jose==3.5.0        # tokens de sesión (JWT)
+passlib==1.7.4            # contraseñas
+bcrypt==4.0.1
+python-multipart==0.0.20
+pydantic==2.11.7
+httpx==0.28.1             # cliente HTTP para las pruebas de la API
 sqlalchemy==2.0.41
 psycopg2-binary==2.9.11   # conexión a PostgreSQL (producción)
 pytest==9.1.1             # pruebas

@@ -14,7 +14,7 @@ from typing import Optional
 
 from sqlalchemy.orm import Session
 
-from errores import ErrorNegocio
+from errores import ErrorNegocio, ErrorNoEncontrado
 from models import EstadoLinea, EstadoPedido, Mesa, Pedido
 from servicios.stock import validar_sucursal
 
@@ -58,7 +58,7 @@ def cargar_mesa(db: Session, empresa_id: int, mesa_id: int) -> Mesa:
     """Una mesa de ESTE cliente; si es de otro, responde 'no existe'."""
     mesa = db.get(Mesa, mesa_id)
     if mesa is None or mesa.empresa_id != empresa_id:
-        raise ErrorNegocio("La mesa no existe.")
+        raise ErrorNoEncontrado("La mesa no existe.")
     return mesa
 
 
@@ -79,7 +79,7 @@ def mesa_por_qr(db: Session, *, empresa_id: int, qr_token: str) -> Mesa:
     """El mesero escanea el QR de la mesa para anclarse a ella (atajo, no la única forma)."""
     mesa = db.query(Mesa).filter_by(empresa_id=empresa_id, qr_token=qr_token, activa=True).one_or_none()
     if mesa is None:
-        raise ErrorNegocio("La mesa no existe.")
+        raise ErrorNoEncontrado("La mesa no existe.")
     return mesa
 
 

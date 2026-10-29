@@ -21,7 +21,7 @@ from typing import Iterable, Optional
 
 from sqlalchemy.orm import Session
 
-from errores import ErrorNegocio
+from errores import ErrorNegocio, ErrorNoEncontrado
 from models import (EstadoLinea, EstadoPedido, Extra, LineaExtra, LineaPedido,
                     LineaQuitado, Pedido, RolUsuario, TraspasoMesero, Usuario)
 from servicios.disponibilidad import Disponibilidad, revisar_disponibilidad
@@ -55,14 +55,14 @@ class ResultadoEnvio:
 def cargar_pedido(db: Session, empresa_id: int, pedido_id: str) -> Pedido:
     pedido = db.get(Pedido, pedido_id)
     if pedido is None or pedido.empresa_id != empresa_id:
-        raise ErrorNegocio("El pedido no existe.")
+        raise ErrorNoEncontrado("El pedido no existe.")
     return pedido
 
 
 def cargar_linea(db: Session, empresa_id: int, linea_id: str) -> LineaPedido:
     linea = db.get(LineaPedido, linea_id)
     if linea is None or linea.empresa_id != empresa_id:
-        raise ErrorNegocio("El plato pedido no existe.")
+        raise ErrorNoEncontrado("El plato pedido no existe.")
     return linea
 
 
@@ -77,7 +77,7 @@ def _exigir_abierto(pedido: Pedido, *, permitir_cuenta_pedida: bool = False):
 def _cargar_personal(db: Session, empresa_id: int, usuario_id: int) -> Usuario:
     usuario = db.get(Usuario, usuario_id)
     if usuario is None or usuario.empresa_id != empresa_id or not usuario.activo:
-        raise ErrorNegocio("El usuario no existe.")
+        raise ErrorNoEncontrado("El usuario no existe.")
     if not any(r.rol in ROLES_DE_SALON for r in usuario.roles):
         raise ErrorNegocio(f"'{usuario.nombre}' no es mesero: no puede atender mesas.")
     return usuario
@@ -95,7 +95,7 @@ def abrir_pedido(db: Session, *, empresa_id: int, sucursal_id: int, mesa_id: int
     validar_sucursal(db, empresa_id, sucursal_id)
     mesa = cargar_mesa(db, empresa_id, mesa_id)
     if mesa.sucursal_id != sucursal_id or not mesa.activa:
-        raise ErrorNegocio("La mesa no existe.")
+        raise ErrorNoEncontrado("La mesa no existe.")
     _cargar_personal(db, empresa_id, mesero_id)
     if comensales is not None and comensales <= 0:
         raise ErrorNegocio("Los comensales deben ser al menos uno.")
@@ -162,7 +162,7 @@ def quitar_linea_tomada(db: Session, *, empresa_id: int, linea_id: str) -> None:
     linea = cargar_linea(db, empresa_id, linea_id)
     if linea.estado != EstadoLinea.tomada:
         raise ErrorNegocio("Este plato ya se envió: para sacarlo hay que cancelarlo.")
-    db.delete(linea)
+    linea.pedido.lineas.remove(linea)      # sale de la lista del pedido y (por delete-orphan) de la base
     db.flush()
 
 
