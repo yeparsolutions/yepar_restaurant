@@ -6,7 +6,10 @@
 # que no dependen una de otra ni tocan datos reales.
 # ============================================================
 
+import os
 from decimal import Decimal
+
+os.environ.setdefault("BCRYPT_ROUNDS", "4")     # contraseñas rápidas en las pruebas
 
 D = Decimal
 
@@ -140,3 +143,22 @@ def cobro(db, salon, nuevo_usuario):
     s["terminal"] = crear_terminal(db, empresa_id=e.id, sucursal_id=suc.id, nombre="Terminal 1")
     db.commit()
     return s
+
+
+@pytest.fixture()
+def cliente(db):
+    """Cliente HTTP de pruebas: la API usa la misma sesión (y la misma base en memoria) que la prueba."""
+    from fastapi.testclient import TestClient
+
+    from database import get_db
+    from main import app
+    app.dependency_overrides[get_db] = lambda: db
+    yield TestClient(app)                      # sin `with`: no corre el arranque que crea la base de desarrollo
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture()
+def cabeceras():
+    """cabeceras(usuario) → {'Authorization': 'Bearer ...'} con una sesión válida de esa persona."""
+    from seguridad import crear_token
+    return lambda usuario: {"Authorization": f"Bearer {crear_token(usuario)}"}

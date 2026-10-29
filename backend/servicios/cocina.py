@@ -20,7 +20,7 @@ from typing import Optional
 
 from sqlalchemy.orm import Session
 
-from errores import ErrorNegocio
+from errores import ErrorNegocio, ErrorNoEncontrado
 from models import (EstacionCocina, EstadoLinea, EstadoPedido, Extra, Item, LineaPedido, Pedido,
                     RecetaLinea, RolUsuario, Usuario)
 from servicios.pedidos import cargar_linea
@@ -77,7 +77,7 @@ class Retiro:
 def _cargar_cocinero(db: Session, empresa_id: int, usuario_id: int, linea: LineaPedido) -> Usuario:
     usuario = db.get(Usuario, usuario_id)
     if usuario is None or usuario.empresa_id != empresa_id or not usuario.activo:
-        raise ErrorNegocio("El usuario no existe.")
+        raise ErrorNoEncontrado("El usuario no existe.")
     roles = {r.rol for r in usuario.roles}
     if not roles & set(ROLES_DE_COCINA):
         raise ErrorNegocio(f"'{usuario.nombre}' no trabaja en cocina ni en barra.")
@@ -228,7 +228,7 @@ def reponer_agotado(db: Session, *, empresa_id: int, item_id: int, usuario_id: i
 def _cargar_personal_cocina(db: Session, empresa_id: int, usuario_id: int) -> Usuario:
     usuario = db.get(Usuario, usuario_id)
     if usuario is None or usuario.empresa_id != empresa_id or not usuario.activo:
-        raise ErrorNegocio("El usuario no existe.")
+        raise ErrorNoEncontrado("El usuario no existe.")
     if not any(r.rol in ROLES_DE_COCINA for r in usuario.roles):
         raise ErrorNegocio(f"'{usuario.nombre}' no trabaja en cocina ni en barra.")
     return usuario

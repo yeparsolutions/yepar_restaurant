@@ -12,3 +12,12 @@
 
 class ErrorNegocio(ValueError):
     """Una regla de negocio no se cumple (dato inválido, ítem ajeno, etc.)."""
+
+
+class ErrorNoEncontrado(ErrorNegocio):
+    """
+    El dato no existe PARA ESTE CLIENTE (o no existe a secas). La API lo responde
+    con 404. Para datos de otro cliente se usa el mismo error: nunca confirmamos
+    que existen. Sigue siendo un ErrorNegocio, así que quien lo capture como
+    ErrorNegocio lo seguirá viendo.
+    """

@@ -18,7 +18,7 @@ from typing import Optional
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from errores import ErrorNegocio
+from errores import ErrorNegocio, ErrorNoEncontrado
 from models import (Caja, EstadoTurno, MedioPago, Pago, RolUsuario, TerminalPago,
                     TurnoCaja, Usuario)
 from servicios.stock import validar_sucursal
@@ -42,7 +42,7 @@ def _dinero(valor, nombre: str) -> Decimal:
 def cargar_usuario(db: Session, empresa_id: int, usuario_id: int) -> Usuario:
     usuario = db.get(Usuario, usuario_id)
     if usuario is None or usuario.empresa_id != empresa_id or not usuario.activo:
-        raise ErrorNegocio("El usuario no existe.")
+        raise ErrorNoEncontrado("El usuario no existe.")
     return usuario
 
 
@@ -100,7 +100,7 @@ def abrir_turno(db: Session, *, empresa_id: int, caja_id: int, usuario_id: int, 
     """El cajero abre su turno con el fondo de cambio con que parte."""
     caja = db.get(Caja, caja_id)
     if caja is None or caja.empresa_id != empresa_id or not caja.activa:
-        raise ErrorNegocio("La caja no existe.")
+        raise ErrorNoEncontrado("La caja no existe.")
     usuario = cargar_usuario(db, empresa_id, usuario_id)
     if not tiene_rol(usuario, *ROLES_DE_CAJA):
         raise ErrorNegocio(f"'{usuario.nombre}' no es cajero: no puede abrir una caja.")
@@ -121,7 +121,7 @@ def abrir_turno(db: Session, *, empresa_id: int, caja_id: int, usuario_id: int, 
 def _cargar_turno(db: Session, empresa_id: int, turno_id: int) -> TurnoCaja:
     turno = db.get(TurnoCaja, turno_id)
     if turno is None or turno.empresa_id != empresa_id:
-        raise ErrorNegocio("El turno no existe.")
+        raise ErrorNoEncontrado("El turno no existe.")
     return turno
 
 

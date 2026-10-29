@@ -29,7 +29,7 @@ from typing import Iterable, Optional
 
 from sqlalchemy.orm import Session
 
-from errores import ErrorNegocio
+from errores import ErrorNegocio, ErrorNoEncontrado
 from models import (EstadoReserva, Extra, ExtraPlato, MotivoMerma, ReservaStock,
                     TipoItem, TipoMovimientoStock)
 from servicios.stock import (aplicar_movimiento, cargar_item, obtener_stock,
@@ -98,7 +98,7 @@ def calcular_necesidad(
     for extra_id in extra_ids:
         extra = db.get(Extra, extra_id)
         if extra is None or extra.empresa_id != empresa_id or not extra.activo:
-            raise ErrorNegocio("El extra pedido no existe.")
+            raise ErrorNoEncontrado("El extra pedido no existe.")
         if not extra.aplica_a_todos and db.get(ExtraPlato, (extra.id, item.id)) is None:
             raise ErrorNegocio(f"El extra '{extra.nombre}' no se ofrece en '{item.nombre}'.")
         necesidad[extra.ingrediente_id] = (necesidad.get(extra.ingrediente_id, Decimal("0"))

@@ -12,24 +12,47 @@ Las decisiones de producto (roles, flujos, stock, cobro, modo sin conexión) est
 
 ```
 backend/
+  main.py                punto de entrada de la API (FastAPI)
+  seguridad.py           contraseñas, tokens de sesión (JWT) y permisos por rol
+  esquemas.py            formas de los datos de entrada y salida de la API
+  errores.py             errores de negocio (422) y "no existe" (404)
   database.py            conexión y base declarativa de SQLAlchemy
   models/
-    enums.py             listas cerradas (tipos de ítem, roles, motivos de merma...)
+    enums.py             listas cerradas (tipos de ítem, roles, estados, medios de pago...)
     tenant.py            empresas (clientes), sucursales, usuarios y roles
-    inventario.py        núcleo: unidades, ítems, recetas, extras, stock, movimientos, lotes
+    inventario.py        unidades, ítems, recetas, extras, stock, movimientos, lotes, reservas
+    salon.py             mesas, pedidos, platos pedidos, traspasos de mesero
+    caja.py              cajas, turnos, terminales, pagos, propinas, configuración de cobro
+  servicios/             reglas de negocio (no confirman: lo hace quien las llama)
+    stock, recetas, compras, produccion, reservas, disponibilidad,
+    mesas, pedidos, cocina, caja, cobro, propinas, cierre
+  routers/               endpoints HTTP: auth, salon (mesero), cocina
   unidades.py            conversión de unidades y costos por unidad base
   semilla.py             catálogo inicial de unidades de medida
-  tests/                 pruebas del núcleo
+  tests/                 pruebas de servicios y de la API
 ```
 
-## Cómo probar
+## Cómo probar y arrancar
 
 ```bash
 cd backend
 pip install -r requirements.txt
-pytest                   # 26 pruebas sobre una base SQLite en memoria
-python semilla.py        # crea la base local de desarrollo y siembra las unidades
+pytest                                  # servicios y API sobre una base SQLite en memoria
+uvicorn main:app --reload               # API en desarrollo (crea una base SQLite local sola)
 ```
+
+Documentación interactiva de la API en `http://localhost:8000/docs`.
+
+Variables de entorno: `DATABASE_URL` (PostgreSQL en producción), `SECRET_KEY` (obligatoria con una base real),
+`ACCESS_TOKEN_MINUTES`, `CORS_ORIGINS`.
+
+## Cómo habla la API
+
+- **Inicio de sesión:** `POST /auth/login` con código del restaurante, usuario y contraseña; devuelve un token para el encabezado `Authorization: Bearer ...`.
+- **Roles:** administrador (todo), cajero, mesero y cocinero (con estación cocina o barra). Cada endpoint exige su rol.
+- **Montos como texto** (`"6500.00"`) para no perder decimales; cantidades de stock con 3 decimales.
+- **Errores:** `404` si no existe (también para datos de otro cliente), `422` si una regla de negocio no se cumple, `409` en conflictos de concurrencia, `403` sin permiso, `401` sin sesión.
+- **Modo sin conexión:** pedidos, platos y pagos aceptan un UUID generado por la tablet; sincronizar dos veces se rechaza en vez de duplicar.
 
 ## Decisiones de diseño del núcleo
 
