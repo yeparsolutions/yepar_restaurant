@@ -22,38 +22,6 @@ from servicios.recetas import LineaReceta, guardar_receta
 from servicios.stock import obtener_stock
 
 
-@pytest.fixture()
-def salon(db, u, local, nuevo_item, nuevo_usuario):
-    """Local con 2 mesas, 2 meseros y una carta: hamburguesa ($6.500), extra tocineta ($1.000) y cola ($1.500)."""
-    empresa, sucursal = local
-    pan = nuevo_item(empresa, u["und"], "Pan")
-    carne = nuevo_item(empresa, u["g"], "Carne")
-    cebolla = nuevo_item(empresa, u["g"], "Cebolla")
-    tocineta = nuevo_item(empresa, u["g"], "Tocineta")
-    cola = nuevo_item(empresa, u["und"], "Cola lata", tipo=TipoItem.vendible_reventa,
-                      precio_venta=Decimal("1500"), estacion=EstacionCocina.barra)
-    burger = nuevo_item(empresa, u["und"], "Hamburguesa", tipo=TipoItem.vendible_preparado,
-                        precio_venta=Decimal("6500"))
-    guardar_receta(db, empresa_id=empresa.id, item_id=burger.id, rendimiento=1, lineas=[
-        LineaReceta(pan.id, 1), LineaReceta(carne.id, 150), LineaReceta(cebolla.id, 30, es_removible=True)])
-    extra = Extra(empresa_id=empresa.id, nombre="Extra tocineta", precio=Decimal("1000"),
-                  ingrediente_id=tocineta.id, cantidad=Decimal("25"), aplica_a_todos=False)
-    db.add(extra)
-    db.flush()
-    db.add(ExtraPlato(extra_id=extra.id, item_id=burger.id))
-    for item, cant in ((pan, 50), (carne, 3000), (cebolla, 1000), (tocineta, 500), (cola, 24)):
-        ingresar_compra(db, empresa_id=empresa.id, sucursal_id=sucursal.id, item_id=item.id,
-                        cantidad=cant, costo_unitario_base="1")
-    m1 = crear_mesa(db, empresa_id=empresa.id, sucursal_id=sucursal.id, nombre="Mesa 1")
-    m2 = crear_mesa(db, empresa_id=empresa.id, sucursal_id=sucursal.id, nombre="Mesa 2")
-    ana = nuevo_usuario(empresa, "Ana")
-    beto = nuevo_usuario(empresa, "Beto")
-    cocinero = nuevo_usuario(empresa, "Carlos", roles=(RolUsuario.cocinero,))
-    db.commit()
-    return dict(empresa=empresa, sucursal=sucursal, pan=pan, carne=carne, cebolla=cebolla, cola=cola,
-                burger=burger, extra=extra, m1=m1, m2=m2, ana=ana, beto=beto, cocinero=cocinero)
-
-
 def abrir(db, s, mesa="m1", mesero="ana", **datos):
     return abrir_pedido(db, empresa_id=s["empresa"].id, sucursal_id=s["sucursal"].id, mesa_id=s[mesa].id,
                         mesero_id=s[mesero].id, **datos)
