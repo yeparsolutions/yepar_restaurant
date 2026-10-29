@@ -37,7 +37,7 @@ from sqlalchemy import (Boolean, CheckConstraint, DateTime, ForeignKey, Index,
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from database import Base
-from models.enums import (EstadoReserva, TIPOS_CON_RECETA, TIPOS_VENDIBLES, FamiliaUnidad,
+from models.enums import (EstacionCocina, EstadoReserva, TIPOS_CON_RECETA, TIPOS_VENDIBLES, FamiliaUnidad,
                           MotivoMerma, TipoItem, TipoMovimientoStock,
                           columna_enum)
 
@@ -129,6 +129,9 @@ class Item(Base):
     # Botón "se acabó" del cocinero: marca el ítem agotado aunque el sistema
     # crea que hay stock. Los platos que lo usan quedan agotados para el mesero.
     agotado_manual: Mapped[bool]    = mapped_column(Boolean, default=False, server_default=false())
+
+    # Dónde se prepara si es vendible: 'cocina' (por defecto) o 'barra' (tragos, bebidas).
+    estacion:       Mapped[Optional[EstacionCocina]] = mapped_column(columna_enum(EstacionCocina))
 
     activo:         Mapped[bool]     = mapped_column(Boolean, default=True, server_default=true())
     creado_en:      Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

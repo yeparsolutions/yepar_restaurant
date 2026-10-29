@@ -90,6 +90,23 @@ class EstadoReserva(str, enum.Enum):
     merma      = "merma"         # se canceló ya en preparación: se pierde
 
 
+# ── Salón: pedidos y platos ──────────────────────────────────
+class EstadoPedido(str, enum.Enum):
+    abierto        = "abierto"          # la mesa está siendo atendida
+    cuenta_pedida  = "cuenta_pedida"    # el cliente pidió la cuenta: ya no se agregan platos
+    cerrado        = "cerrado"          # cobrado
+    anulado        = "anulado"          # se abrió por error / nadie consumió
+
+
+class EstadoLinea(str, enum.Enum):
+    tomada         = "tomada"           # anotada en la tablet, aún NO enviada (cola del mesero)
+    enviada        = "enviada"          # llegó a cocina/barra, estado 'nuevo'
+    en_preparacion = "en_preparacion"   # el cocinero la empezó
+    lista          = "lista"            # lista para retirar: la mesa se enciende y vibra
+    entregada      = "entregada"        # el mesero la llevó a la mesa
+    cancelada      = "cancelada"
+
+
 # ── Usuarios ─────────────────────────────────────────────────
 class RolUsuario(str, enum.Enum):
     administrador = "administrador"
