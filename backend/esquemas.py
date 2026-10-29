@@ -10,7 +10,7 @@
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Annotated, Optional
+from typing import Annotated, Literal, Optional
 
 from pydantic import BaseModel, Field, PlainSerializer
 
@@ -18,6 +18,8 @@ from pydantic import BaseModel, Field, PlainSerializer
 # Montos: siempre con 2 decimales y como TEXTO ("6500.00"); cantidades de stock con 3.
 Dinero = Annotated[Decimal, PlainSerializer(lambda d: f"{d:.2f}", return_type=str, when_used="json")]
 Cantidad = Annotated[Decimal, PlainSerializer(lambda d: f"{d:.3f}", return_type=str, when_used="json")]
+CostoUnitario = Annotated[Decimal, PlainSerializer(lambda d: f"{d:.6f}", return_type=str, when_used="json")]
+Porcentaje = Annotated[Decimal, PlainSerializer(lambda d: f"{d:.1f}", return_type=str, when_used="json")]
 
 
 class Entrada(BaseModel):
@@ -219,3 +221,152 @@ class ListoOut(BaseModel):
 
 class AgotadoOut(BaseModel):
     platos_agotados: list[str]
+
+
+# ── Catálogo ─────────────────────────────────────────────────
+class UnidadOut(BaseModel):
+    codigo: str
+    nombre: str
+    familia: str
+    factor_a_base: Decimal
+    es_base: bool
+
+
+class CategoriaIn(Entrada):
+    nombre: str = Field(min_length=1, max_length=100)
+    orden: int = 0
+
+
+class CategoriaOut(BaseModel):
+    id: int
+    nombre: str
+    orden: int
+
+
+class ItemIn(Entrada):
+    tipo: Literal["materia_prima", "componente", "vendible_preparado", "vendible_reventa"]
+    nombre: str = Field(min_length=1, max_length=200)
+    unidad_base: str                           # 'g', 'ml' o 'und'
+    precio_venta: Optional[Decimal] = None
+    categoria_id: Optional[int] = None
+    stock_minimo: Decimal = Decimal("0")
+    estacion: Optional[Literal["cocina", "barra"]] = None   # solo vendibles
+    foto_url: Optional[str] = Field(default=None, max_length=500)
+    codigo_barra: Optional[str] = Field(default=None, max_length=100)
+
+
+class ItemCambiosIn(Entrada):
+    """Solo se cambia lo que se envía (el tipo y la unidad base no se modifican)."""
+    nombre: Optional[str] = Field(default=None, min_length=1, max_length=200)
+    precio_venta: Optional[Decimal] = None
+    categoria_id: Optional[int] = None
+    stock_minimo: Optional[Decimal] = None
+    estacion: Optional[Literal["cocina", "barra"]] = None
+    foto_url: Optional[str] = Field(default=None, max_length=500)
+    codigo_barra: Optional[str] = Field(default=None, max_length=100)
+    activo: Optional[bool] = None
+
+
+class ItemOut(BaseModel):
+    id: int
+    tipo: str
+    nombre: str
+    unidad_base: str
+    categoria_id: Optional[int] = None
+    precio_venta: Optional[Dinero] = None
+    estacion: Optional[str] = None
+    foto_url: Optional[str] = None
+    codigo_barra: Optional[str] = None
+    stock_minimo: Cantidad
+    costo_promedio: CostoUnitario
+    costo_ultimo: CostoUnitario
+    costo_referencia: CostoUnitario
+    agotado_manual: bool
+    activo: bool
+    tiene_receta: bool
+
+
+class PresentacionIn(Entrada):
+    nombre: str = Field(min_length=1, max_length=60)
+    cantidad_en_base: Decimal
+    es_defecto: bool = False
+
+
+class PresentacionOut(BaseModel):
+    id: int
+    item_id: int
+    nombre: str
+    cantidad_en_base: Cantidad
+    es_defecto: bool
+
+
+class ExtraIn(Entrada):
+    nombre: str = Field(min_length=1, max_length=100)
+    precio: Decimal
+    ingrediente_id: int
+    cantidad: Decimal
+    aplica_a_todos: bool = True
+    plato_ids: list[int] = []
+
+
+class ExtraOut(BaseModel):
+    id: int
+    nombre: str
+    precio: Dinero
+    ingrediente_id: int
+    cantidad: Cantidad
+    aplica_a_todos: bool
+    plato_ids: list[int]
+    activo: bool
+
+
+# ── Recetas y costos ─────────────────────────────────────────
+class LineaRecetaIn(Entrada):
+    ingrediente_id: int
+    cantidad: Decimal
+    unidad: Optional[str] = None               # 'kg', 'g'...; sin unidad = ya viene en la unidad base
+    es_removible: bool = False
+
+
+class RecetaIn(Entrada):
+    rendimiento: Decimal
+    rendimiento_unidad: Optional[str] = None
+    instrucciones: Optional[str] = None
+    lineas: list[LineaRecetaIn]
+
+
+class LineaRecetaOut(BaseModel):
+    ingrediente_id: int
+    nombre: str
+    cantidad: Cantidad                         # en la unidad base del ingrediente
+    unidad: str
+    es_removible: bool
+    orden: int
+
+
+class RecetaOut(BaseModel):
+    item_id: int
+    nombre: str
+    rendimiento: Cantidad
+    unidad: str
+    instrucciones: Optional[str] = None
+    lineas: list[LineaRecetaOut]
+
+
+class CostoLineaOut(BaseModel):
+    ingrediente_id: int
+    nombre: str
+    cantidad: Cantidad
+    costo_unitario: CostoUnitario
+    costo_linea: Dinero
+
+
+class CostoRecetaOut(BaseModel):
+    item_id: int
+    nombre: str
+    rendimiento: Cantidad
+    costo_total: Dinero
+    costo_unitario: CostoUnitario
+    precio_venta: Optional[Dinero] = None
+    margen_pct: Optional[Porcentaje] = None    # (precio − costo) / precio, solo en vendibles con precio
+    lineas: list[CostoLineaOut]
