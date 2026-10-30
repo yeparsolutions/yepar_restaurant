@@ -142,3 +142,20 @@ class EstacionCocina(str, enum.Enum):
     """El barman es simplemente un cocinero con estación 'barra'."""
     cocina = "cocina"
     barra  = "barra"
+
+
+# ── Facturación (documentos tributarios) ─────────────────────
+class ProveedorFacturacion(str, enum.Enum):
+    yepardte     = "yepardte"       # Chile: boleta/factura al SII
+    yeparfactura = "yeparfactura"   # Venezuela: factura al SENIAT (vía imprenta digital)
+
+
+class TipoDocumento(str, enum.Enum):
+    boleta  = "boleta"              # consumidor final (Chile)
+    factura = "factura"             # con datos del receptor (Chile y Venezuela)
+
+
+class EstadoDocumento(str, enum.Enum):
+    pendiente = "pendiente"         # no se pudo confirmar con el facturador (sin red, tardó): se reintenta
+    emitido   = "emitido"           # el facturador devolvió el folio
+    rechazado = "rechazado"         # el facturador lo rechazó (datos inválidos): se corrige y se reintenta
