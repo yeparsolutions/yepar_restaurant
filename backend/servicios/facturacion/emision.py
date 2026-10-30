@@ -13,6 +13,7 @@
 # ============================================================
 
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from decimal import Decimal
 from typing import Optional
 
@@ -123,6 +124,12 @@ def _receptor(tipo: TipoDocumento, datos: Optional[dict]) -> dict:
 
 
 # ── Emisión ──────────────────────────────────────────────────
+def _documento_de_venta(db: Session, pedido_id: str) -> Optional[DocumentoTributario]:
+    """La boleta/factura de la cuenta (las notas de crédito no cuentan)."""
+    return (db.query(DocumentoTributario).filter_by(pedido_id=pedido_id)
+            .filter(DocumentoTributario.tipo != TipoDocumento.nota_credito).one_or_none())
+
+
 def _forma_de_pago(db: Session, pedido: Pedido) -> Optional[str]:
     """Solo si toda la cuenta se pagó con UN medio sin ambigüedad (la tarjeta no distingue crédito/débito)."""
     medios = {m for (m,) in db.query(Pago.medio).filter_by(pedido_id=pedido.id).distinct()}
@@ -131,11 +138,23 @@ def _forma_de_pago(db: Session, pedido: Pedido) -> Optional[str]:
     return None
 
 
+def _referencia_de(db: Session, doc: DocumentoTributario) -> Optional[dict]:
+    """Solo la nota de crédito: apunta al documento que anula (con la fecha en hora del restaurante)."""
+    if doc.tipo != TipoDocumento.nota_credito:
+        return None
+    origen = db.get(DocumentoTributario, doc.documento_origen_id)
+    emitido = origen.emitido_en if origen.emitido_en.tzinfo else origen.emitido_en.replace(tzinfo=timezone.utc)
+    zona = ZoneInfo("America/Caracas" if origen.proveedor == ProveedorFacturacion.yeparfactura else "America/Santiago")
+    return {"tipo": origen.tipo.value, "folio": origen.folio, "fecha": emitido.astimezone(zona).date().isoformat(),
+            "motivo": doc.motivo}
+
+
 def _intentar(db: Session, doc: DocumentoTributario, pedido: Pedido, integ: IntegracionFacturacion) -> DocumentoTributario:
     """Un intento contra el facturador. Deja el documento emitido, pendiente (reintentable) o rechazado."""
     solicitud = SolicitudEmision(
         tipo=doc.tipo.value, receptor=doc.receptor, items=_items_del_pedido(pedido), idempotency_key=doc.idempotency_key,
-        referencia_externa=pedido.id, moneda=doc.moneda, forma_pago=_forma_de_pago(db, pedido))
+        referencia_externa=pedido.id, moneda=doc.moneda, forma_pago=_forma_de_pago(db, pedido),
+        referencia=_referencia_de(db, doc))
     doc.intentos += 1
     try:
         r = _CONECTORES[integ.proveedor](descifrar(integ.api_key_cifrada)).emitir(solicitud)
@@ -147,6 +166,8 @@ def _intentar(db: Session, doc: DocumentoTributario, pedido: Pedido, integ: Inte
         doc.folio, doc.neto, doc.iva, doc.total = r.folio, r.neto, r.iva, r.total
         doc.pdf_url, doc.track_id, doc.emitido_en = r.pdf_url, r.track_id, _ahora()
         doc.moneda_montos, doc.tasa_cambio, doc.total_divisa = r.moneda_montos, r.tasa_cambio, r.total_divisa
+        if doc.tipo == TipoDocumento.nota_credito:          # la nota emitida deja el original anulado
+            db.get(DocumentoTributario, doc.documento_origen_id).estado = EstadoDocumento.anulado
     db.flush()
     return doc
 
@@ -167,8 +188,8 @@ def emitir_documento(db: Session, *, empresa_id: int, usuario_id: int, pedido_id
         raise ErrorNegocio("En Venezuela solo se emite factura (no existe boleta).")
     empresa = _cargar_empresa(db, empresa_id)
 
-    doc = db.query(DocumentoTributario).filter_by(pedido_id=pedido.id).one_or_none()
-    if doc is not None and doc.estado == EstadoDocumento.emitido:
+    doc = _documento_de_venta(db, pedido.id)
+    if doc is not None and doc.estado in (EstadoDocumento.emitido, EstadoDocumento.anulado):
         return doc
     datos_receptor = _receptor(tipo, receptor if receptor is not None else (doc.receptor if doc else None))
     if doc is None:
@@ -193,7 +214,7 @@ def reintentar_pendientes(db: Session, *, empresa_id: int) -> list:
 # ── Consultas ────────────────────────────────────────────────
 def documento_de_pedido(db: Session, *, empresa_id: int, pedido_id: str) -> DocumentoTributario:
     pedido = cargar_pedido(db, empresa_id, pedido_id)
-    doc = db.query(DocumentoTributario).filter_by(pedido_id=pedido.id).one_or_none()
+    doc = _documento_de_venta(db, pedido.id)
     if doc is None:
         raise ErrorNoEncontrado("Esta cuenta aún no tiene documento tributario.")
     return doc
@@ -235,3 +256,39 @@ def emitir_automatico(db: Session, *, empresa_id: int, usuario_id: int, pedido_i
                                 tipo=integ.tipo_automatico)
     except ErrorNegocio:
         return None
+
+
+# ── Nota de crédito: anular un documento emitido ─────────────
+def anular_documento(db: Session, *, empresa_id: int, usuario_id: int, documento_id: int, motivo: str) -> DocumentoTributario:
+    """
+    Anula por completo una boleta/factura ya emitida con una nota de crédito que apunta a ella.
+    Seguro de repetir: si la nota ya existe (emitida o pendiente) se devuelve / se reintenta, sin duplicar.
+    Ojo: esto es solo el papel tributario; devolver el dinero al cliente es aparte.
+    """
+    motivo = (motivo or "").strip()
+    if not motivo:
+        raise ErrorNegocio("Indica el motivo de la anulación.")
+    integ = integracion_activa(db, empresa_id)
+    origen = db.get(DocumentoTributario, documento_id)
+    if origen is None or origen.empresa_id != empresa_id:
+        raise ErrorNoEncontrado("El documento no existe.")
+    if origen.tipo == TipoDocumento.nota_credito:
+        raise ErrorNegocio("Una nota de crédito no se anula.")
+    if origen.proveedor != integ.proveedor:
+        raise ErrorNegocio("El documento se emitió con otro facturador: cambia a ese facturador para anularlo.")
+    if origen.estado not in (EstadoDocumento.emitido, EstadoDocumento.anulado):
+        raise ErrorNegocio("Solo se anula un documento ya emitido.")
+
+    clave = f"yrs-nc-{origen.id}"
+    nota = db.query(DocumentoTributario).filter_by(empresa_id=empresa_id, idempotency_key=clave).one_or_none()
+    if nota is not None and nota.estado in (EstadoDocumento.emitido, EstadoDocumento.anulado):
+        return nota
+    if nota is None:
+        nota = DocumentoTributario(
+            empresa_id=empresa_id, sucursal_id=origen.sucursal_id, pedido_id=origen.pedido_id, proveedor=origen.proveedor,
+            tipo=TipoDocumento.nota_credito, idempotency_key=clave, receptor=origen.receptor, moneda=origen.moneda,
+            documento_origen_id=origen.id, emitido_por_id=usuario_id)
+        db.add(nota)
+    nota.motivo = motivo[:200]
+    db.flush()
+    return _intentar(db, nota, cargar_pedido(db, empresa_id, origen.pedido_id), integ)

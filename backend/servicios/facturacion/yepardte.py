@@ -74,6 +74,10 @@ class ConectorYeparDTE(ConectorHttp):
             "referencia_externa": s.referencia_externa,
             "idempotency_key": s.idempotency_key,
         }
+        if s.referencia:        # nota de crédito: "anula documento" (cod_ref 1) apuntando al original (39 boleta, 33 factura)
+            cuerpo["referencia"] = {"tipo_doc_ref": "39" if s.referencia["tipo"] == "boleta" else "33",
+                                    "folio_ref": s.referencia["folio"], "fecha_ref": s.referencia["fecha"],
+                                    "razon": s.referencia["motivo"], "cod_ref": 1}
         datos = self._llamar("POST", self.ruta_emitir, cuerpo)
         doc = datos.get("documento") or {}
         if not doc.get("folio"):

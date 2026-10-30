@@ -396,3 +396,86 @@ def test_un_restaurante_no_factura_cuentas_de_otro(db, api, falso, otro_local, n
     r = cliente.post(f"/pedidos/{pid}/documento", json={"tipo": "boleta"}, headers=cab)
     assert r.status_code == 404
     assert cliente.get("/documentos", headers=cab).json() == []
+
+
+# ── Notas de crédito: anular un documento emitido ────────────
+def emitir_boleta(api):
+    pid = pedido_pagado(api)
+    d = api.post("cata", f"/pedidos/{pid}/documento", {"tipo": "boleta"}).json()
+    return pid, d
+
+
+def test_anular_boleta_emite_nota_de_credito_que_apunta_al_original(db, api, falso):
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    conectar(api)
+    pid, boleta = emitir_boleta(api)
+
+    assert api.post("cata", f"/documentos/{boleta['id']}/anular", {"motivo": "Cliente se arrepintió"}).status_code == 403   # solo el administrador
+    assert api.post("admin", f"/documentos/{boleta['id']}/anular", {"motivo": "  "}).status_code == 422
+    r = api.post("admin", f"/documentos/{boleta['id']}/anular", {"motivo": "Cobro duplicado"})
+    assert r.status_code == 200, r.text
+    nota = r.json()
+    assert nota["tipo"] == "nota_credito" and nota["estado"] == "emitido" and nota["documento_origen_id"] == boleta["id"]
+    assert nota["folio"] == "1002" and nota["motivo"] == "Cobro duplicado"
+
+    _, ruta, _, c = falso.emisiones[1]
+    assert c["tipo"] == "nota_credito" and c["idempotency_key"] == f"yrs-nc-{boleta['id']}"
+    hoy = datetime.now(ZoneInfo("America/Santiago")).date().isoformat()
+    assert c["referencia"] == {"tipo_doc_ref": "39", "folio_ref": "1001", "fecha_ref": hoy, "razon": "Cobro duplicado", "cod_ref": 1}
+    assert c["items"] == falso.emisiones[0][3]["items"]                      # la nota repite lo que anula
+    assert api.get("cata", f"/pedidos/{pid}/documento").json()["estado"] == "anulado"          # el original queda anulado
+
+    # Repetir no emite otra nota; y una nota no se anula.
+    otra = api.post("admin", f"/documentos/{boleta['id']}/anular", {"motivo": "Cobro duplicado"})
+    assert otra.status_code == 200 and otra.json()["id"] == nota["id"] and len(falso.emisiones) == 2
+    assert api.post("admin", f"/documentos/{nota['id']}/anular", {"motivo": "otra"}).status_code == 422
+    assert [d["tipo"] for d in api.get("cata", "/documentos").json()] == ["nota_credito", "boleta"]
+
+
+def test_nota_de_credito_pendiente_se_reintenta_y_un_rechazo_se_ve(db, api, falso):
+    conectar(api)
+    _, boleta = emitir_boleta(api)
+    falso.guion = [httpx.ConnectError("sin red")]
+    r = api.post("admin", f"/documentos/{boleta['id']}/anular", {"motivo": "Error de caja"})
+    assert r.status_code == 202 and r.json()["estado"] == "pendiente"
+    rr = api.post("cata", "/documentos/reintentar").json()
+    assert rr[0]["tipo"] == "nota_credito" and rr[0]["estado"] == "emitido" and rr[0]["intentos"] == 2
+    assert {e[3]["idempotency_key"] for e in falso.emisiones[1:]} == {f"yrs-nc-{boleta['id']}"}
+
+    _, b2 = (lambda p: (p, api.post("cata", f"/pedidos/{p}/documento", {"tipo": "boleta"}).json()))(pedido_pagado_mesa2(api))
+    falso.guion = [httpx.Response(400, json={"detail": "Folio de referencia no existe en el SII"})]
+    r = api.post("admin", f"/documentos/{b2['id']}/anular", {"motivo": "Prueba"})
+    assert r.status_code == 422 and "Folio de referencia" in r.json()["detail"]
+
+
+def test_solo_se_anula_lo_emitido_y_lo_propio(db, api, falso, otro_local, nuevo_usuario, cabeceras, cliente):
+    from models import RolUsuario
+    conectar(api)
+    pid = pedido_pagado(api)
+    falso.guion = [httpx.ConnectError("sin red")]
+    pendiente = api.post("cata", f"/pedidos/{pid}/documento", {"tipo": "boleta"}).json()
+    r = api.post("admin", f"/documentos/{pendiente['id']}/anular", {"motivo": "No emitido aún"})
+    assert r.status_code == 422 and "ya emitido" in r.json()["detalle"]
+    assert api.post("admin", "/documentos/9999/anular", {"motivo": "Inexistente"}).status_code == 404
+
+    api.post("cata", "/documentos/reintentar")
+    ajena, suc = otro_local
+    admin_ajeno = nuevo_usuario(ajena, "Admin ajeno", roles=(RolUsuario.administrador,), sucursal_id=suc.id)
+    cab = cabeceras(admin_ajeno)
+    cliente.put("/facturacion/conexion", json={"proveedor": "yepardte", "api_key": "otra-clave-999"}, headers=cab)
+    assert cliente.post(f"/documentos/{pendiente['id']}/anular", json={"motivo": "Ajeno"}, headers=cab).status_code == 404
+
+
+def test_anular_factura_venezolana_referencia_el_numero_de_control(db, venezuela, falso):
+    api = venezuela
+    conectar(api, proveedor="yeparfactura")
+    pid = pedido_pagado(api)
+    receptor = {"rut": "J-12345678-9", "nombre": "Inversiones Caribe C.A."}
+    f = api.post("cata", f"/pedidos/{pid}/documento", {"tipo": "factura", "receptor": receptor}).json()
+    r = api.post("admin", f"/documentos/{f['id']}/anular", {"motivo": "Datos del cliente erróneos"})
+    assert r.status_code == 200 and r.json()["tipo"] == "nota_credito" and r.json()["folio"] == "00-00001002"
+    c = falso.emisiones[1][3]
+    assert c["tipo"] == "nota_credito" and c["request_id"] == f"yrs-nc-{f['id']}" and c["referencia"] == "00-00001001"
+    assert c["receptor_rif"] == "J-12345678-9" and c["moneda"] == "USD"
+    assert api.get("cata", f"/pedidos/{pid}/documento").json()["estado"] == "anulado"

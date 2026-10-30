@@ -53,14 +53,14 @@ class ConectorYeparFactura(ConectorHttp):
         } for i in s.items]
 
     def emitir(self, s: SolicitudEmision) -> ResultadoEmision:
-        if s.tipo != "factura":
+        if s.tipo not in ("factura", "nota_credito"):
             raise ErrorFacturador("En Venezuela solo se emite factura (no existe boleta).", reintentable=False)
         if s.moneda not in MONEDAS:
             raise ErrorFacturador(f"YeparFactura vende en {', '.join(MONEDAS)}; el restaurante está en '{s.moneda}'.",
                                   reintentable=False)
         cuerpo = {
             "request_id": s.idempotency_key,
-            "tipo": "factura",
+            "tipo": s.tipo,
             "moneda": s.moneda,
             "condicion_pago": "contado",
             "items": self._items(s),
@@ -68,6 +68,8 @@ class ConectorYeparFactura(ConectorHttp):
         }
         if s.forma_pago:
             cuerpo["forma_pago"] = s.forma_pago
+        if s.referencia:        # nota de crédito: el documento afectado es el número de control de la factura
+            cuerpo["referencia"] = s.referencia["folio"]
         datos = self._llamar("POST", self.ruta_emitir, cuerpo)
         folio = datos.get("numero_control") or datos.get("numeracion_consecutiva")
         if not folio:

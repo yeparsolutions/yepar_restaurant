@@ -43,6 +43,8 @@ class SolicitudEmision:
     iva_incluido: bool = True                   # los precios de la carta ya incluyen IVA
     moneda: Optional[str] = None                # moneda en que vende el restaurante (VES, USD, EUR, CLP...)
     forma_pago: Optional[str] = None            # "efectivo" | "transferencia"... solo si es un único medio
+    # Solo en la nota de crédito: el documento que anula {"tipo", "folio", "fecha" (AAAA-MM-DD), "motivo"}.
+    referencia: Optional[dict] = None
 
 
 @dataclass
