@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 
 from errores import ErrorNegocio, ErrorNoEncontrado
 from models import (DocumentoTributario, Empresa, EstadoDocumento, EstadoLinea, EstadoPedido,
-                    IntegracionFacturacion, Pedido, ProveedorFacturacion, TipoDocumento)
+                    IntegracionFacturacion, MedioPago, Pago, Pedido, ProveedorFacturacion, TipoDocumento)
 from servicios.facturacion import base
 from servicios.facturacion.base import ErrorFacturador, SolicitudEmision
 from servicios.facturacion.secretos import cifrar, descifrar
@@ -114,6 +114,8 @@ def _receptor(tipo: TipoDocumento, datos: Optional[dict]) -> dict:
     datos = {k: (v or "").strip() for k, v in (datos or {}).items() if v is not None}
     if tipo == TipoDocumento.factura:
         faltan = [c for c in ("rut", "nombre") if not datos.get(c)]
+        if faltan == ["rut"] and datos.get("cedula"):
+            faltan = []                         # Venezuela: se puede facturar a una persona con su cédula
         if faltan:
             raise ErrorNegocio("La factura necesita los datos del receptor: " + ", ".join(faltan) + ".")
         return datos
@@ -121,11 +123,19 @@ def _receptor(tipo: TipoDocumento, datos: Optional[dict]) -> dict:
 
 
 # ── Emisión ──────────────────────────────────────────────────
+def _forma_de_pago(db: Session, pedido: Pedido) -> Optional[str]:
+    """Solo si toda la cuenta se pagó con UN medio sin ambigüedad (la tarjeta no distingue crédito/débito)."""
+    medios = {m for (m,) in db.query(Pago.medio).filter_by(pedido_id=pedido.id).distinct()}
+    if len(medios) == 1:
+        return {MedioPago.efectivo: "efectivo", MedioPago.transferencia: "transferencia"}.get(next(iter(medios)))
+    return None
+
+
 def _intentar(db: Session, doc: DocumentoTributario, pedido: Pedido, integ: IntegracionFacturacion) -> DocumentoTributario:
     """Un intento contra el facturador. Deja el documento emitido, pendiente (reintentable) o rechazado."""
     solicitud = SolicitudEmision(
         tipo=doc.tipo.value, receptor=doc.receptor, items=_items_del_pedido(pedido), idempotency_key=doc.idempotency_key,
-        referencia_externa=pedido.id, moneda=doc.moneda, tasa_cambio=doc.tasa_cambio)
+        referencia_externa=pedido.id, moneda=doc.moneda, forma_pago=_forma_de_pago(db, pedido))
     doc.intentos += 1
     try:
         r = _CONECTORES[integ.proveedor](descifrar(integ.api_key_cifrada)).emitir(solicitud)
@@ -136,12 +146,13 @@ def _intentar(db: Session, doc: DocumentoTributario, pedido: Pedido, integ: Inte
         doc.estado, doc.ultimo_error = EstadoDocumento.emitido, None
         doc.folio, doc.neto, doc.iva, doc.total = r.folio, r.neto, r.iva, r.total
         doc.pdf_url, doc.track_id, doc.emitido_en = r.pdf_url, r.track_id, _ahora()
+        doc.moneda_montos, doc.tasa_cambio, doc.total_divisa = r.moneda_montos, r.tasa_cambio, r.total_divisa
     db.flush()
     return doc
 
 
 def emitir_documento(db: Session, *, empresa_id: int, usuario_id: int, pedido_id: str, tipo: TipoDocumento,
-                     receptor: Optional[dict] = None, tasa_cambio=None) -> DocumentoTributario:
+                     receptor: Optional[dict] = None) -> DocumentoTributario:
     """
     Emite la boleta/factura de una cuenta ya pagada. Es seguro repetirlo:
       - ya emitido  → devuelve el mismo documento (no vuelve a llamar al facturador).
@@ -155,9 +166,6 @@ def emitir_documento(db: Session, *, empresa_id: int, usuario_id: int, pedido_id
     if integ.proveedor == ProveedorFacturacion.yeparfactura and tipo != TipoDocumento.factura:
         raise ErrorNegocio("En Venezuela solo se emite factura (no existe boleta).")
     empresa = _cargar_empresa(db, empresa_id)
-    tasa = None if tasa_cambio is None else Decimal(str(tasa_cambio))
-    if integ.proveedor == ProveedorFacturacion.yeparfactura and (tasa is None or tasa <= 0):
-        raise ErrorNegocio("Indica la tasa de cambio del día: la factura venezolana muestra ambos montos.")
 
     doc = db.query(DocumentoTributario).filter_by(pedido_id=pedido.id).one_or_none()
     if doc is not None and doc.estado == EstadoDocumento.emitido:
@@ -169,7 +177,7 @@ def emitir_documento(db: Session, *, empresa_id: int, usuario_id: int, pedido_id
             tipo=tipo, idempotency_key=f"yrs-{pedido.id}", emitido_por_id=usuario_id)
         db.add(doc)
     doc.proveedor, doc.tipo, doc.receptor = integ.proveedor, tipo, datos_receptor
-    doc.moneda, doc.tasa_cambio = empresa.moneda, tasa
+    doc.moneda = empresa.moneda
     db.flush()
     return _intentar(db, doc, pedido, integ)
 
@@ -197,3 +205,33 @@ def listar_documentos(db: Session, *, empresa_id: int, estado: Optional[EstadoDo
     if estado is not None:
         consulta = consulta.filter_by(estado=estado)
     return consulta.order_by(DocumentoTributario.id.desc()).limit(limite).all()
+
+
+# ── Emisión automática al cobrar ─────────────────────────────
+def configurar(db: Session, *, empresa_id: int, emision_automatica: Optional[bool] = None,
+               tipo_automatico: Optional[TipoDocumento] = None) -> IntegracionFacturacion:
+    integ = integracion_activa(db, empresa_id)
+    tipo = tipo_automatico or integ.tipo_automatico
+    activar = integ.emision_automatica if emision_automatica is None else emision_automatica
+    if activar and integ.proveedor == ProveedorFacturacion.yeparfactura:
+        raise ErrorNegocio("En Venezuela la factura necesita los datos del cliente (RIF o cédula): se emite desde la caja.")
+    if activar and tipo != TipoDocumento.boleta:
+        raise ErrorNegocio("Solo la boleta (consumidor final) se puede emitir sola; la factura necesita los datos del cliente.")
+    integ.emision_automatica, integ.tipo_automatico = activar, tipo
+    db.flush()
+    return integ
+
+
+def emitir_automatico(db: Session, *, empresa_id: int, usuario_id: int, pedido_id: str) -> Optional[DocumentoTributario]:
+    """
+    La llama el cobro cuando la mesa queda pagada. NUNCA bloquea ni falla el cobro: si no corresponde
+    o algo no cuadra devuelve None; si el facturador no responde, el documento queda pendiente.
+    """
+    integ = db.get(IntegracionFacturacion, empresa_id)
+    if integ is None or not integ.activo or not integ.emision_automatica:
+        return None
+    try:
+        return emitir_documento(db, empresa_id=empresa_id, usuario_id=usuario_id, pedido_id=pedido_id,
+                                tipo=integ.tipo_automatico)
+    except ErrorNegocio:
+        return None

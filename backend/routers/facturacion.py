@@ -10,7 +10,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from database import get_db
-from esquemas import (ConexionFacturacionIn, ConexionFacturacionOut, DocumentoOut, EmitirDocumentoIn)
+from esquemas import (ConexionFacturacionIn, ConexionFacturacionOut, ConfigFacturacionIn, DocumentoOut,
+                      EmitirDocumentoIn)
 from models import EstadoDocumento, ProveedorFacturacion, RolUsuario, TipoDocumento, Usuario
 from seguridad import exigir_roles
 from servicios.facturacion import emision as svc
@@ -25,11 +26,13 @@ def documento_out(d) -> DocumentoOut:
     return DocumentoOut(
         id=d.id, pedido_id=d.pedido_id, proveedor=d.proveedor.value, tipo=d.tipo.value, estado=d.estado.value,
         folio=d.folio, neto=d.neto, iva=d.iva, total=d.total, pdf_url=d.pdf_url, moneda=d.moneda,
-        tasa_cambio=d.tasa_cambio, intentos=d.intentos, ultimo_error=d.ultimo_error)
+        moneda_montos=d.moneda_montos, tasa_cambio=d.tasa_cambio, total_divisa=d.total_divisa, intentos=d.intentos,
+        ultimo_error=d.ultimo_error)
 
 
 def conexion_out(integ) -> ConexionFacturacionOut:
-    return ConexionFacturacionOut(proveedor=integ.proveedor.value, activo=integ.activo, api_key_final=svc.api_key_final(integ))
+    return ConexionFacturacionOut(proveedor=integ.proveedor.value, activo=integ.activo, api_key_final=svc.api_key_final(integ),
+                                  emision_automatica=integ.emision_automatica, tipo_automatico=integ.tipo_automatico.value)
 
 
 # ── Conexión con el facturador ───────────────────────────────
@@ -47,6 +50,15 @@ def ver_conexion(db: Session = Depends(get_db), usuario: Usuario = Depends(solo_
     return conexion_out(svc.integracion_activa(db, usuario.empresa_id))
 
 
+@router.put("/facturacion/configuracion", response_model=ConexionFacturacionOut)
+def configurar(datos: ConfigFacturacionIn, db: Session = Depends(get_db), usuario: Usuario = Depends(solo_admin)):
+    """Activa o desactiva la emisión automática de la boleta al cerrarse la mesa (solo Chile)."""
+    integ = svc.configurar(db, empresa_id=usuario.empresa_id, emision_automatica=datos.emision_automatica,
+                           tipo_automatico=TipoDocumento(datos.tipo_automatico) if datos.tipo_automatico else None)
+    db.commit()
+    return conexion_out(integ)
+
+
 @router.delete("/facturacion/conexion", status_code=204)
 def desconectar(db: Session = Depends(get_db), usuario: Usuario = Depends(solo_admin)):
     svc.desconectar(db, empresa_id=usuario.empresa_id)
@@ -62,7 +74,7 @@ def emitir(pedido_id: str, datos: EmitirDocumentoIn, db: Session = Depends(get_d
     """
     doc = svc.emitir_documento(
         db, empresa_id=usuario.empresa_id, usuario_id=usuario.id, pedido_id=pedido_id, tipo=TipoDocumento(datos.tipo),
-        receptor=datos.receptor.model_dump(exclude_none=True) if datos.receptor else None, tasa_cambio=datos.tasa_cambio)
+        receptor=datos.receptor.model_dump(exclude_none=True) if datos.receptor else None)
     db.commit()                                  # el intento queda registrado aunque haya fallado
     salida = documento_out(doc)
     if doc.estado == EstadoDocumento.rechazado:

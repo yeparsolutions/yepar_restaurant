@@ -40,9 +40,9 @@ class SolicitudEmision:
     items: list                                 # [{"nombre", "cantidad", "precio_unitario", "descuento"}]
     idempotency_key: str
     referencia_externa: str                     # id del pedido en Yepar Restaurant
-    iva_incluido: bool = True
-    moneda: Optional[str] = None
-    tasa_cambio: Optional[Decimal] = None       # Venezuela: tasa del día para mostrar ambos montos
+    iva_incluido: bool = True                   # los precios de la carta ya incluyen IVA
+    moneda: Optional[str] = None                # moneda en que vende el restaurante (VES, USD, EUR, CLP...)
+    forma_pago: Optional[str] = None            # "efectivo" | "transferencia"... solo si es un único medio
 
 
 @dataclass
@@ -53,6 +53,9 @@ class ResultadoEmision:
     total: Optional[Decimal] = None
     pdf_url: Optional[str] = None
     track_id: Optional[str] = None
+    moneda_montos: Optional[str] = None         # moneda de neto/iva/total (Venezuela: VES aunque se venda en USD)
+    tasa_cambio: Optional[Decimal] = None       # Venezuela: la congela YeparFactura con la tasa BCV de YeparFX
+    total_divisa: Optional[Decimal] = None      # Venezuela: total en la moneda original de la venta
 
 
 class Facturador(Protocol):
@@ -94,20 +97,37 @@ class ConectorHttp:
                 reintentable=True)
         except httpx.HTTPError as e:
             raise ErrorFacturador(f"No se pudo conectar con {self.nombre}: {e}", reintentable=True)
+        detalle = self._detalle(r)
         if r.status_code >= 500:
             raise ErrorFacturador(f"{self.nombre} respondió {r.status_code}.", reintentable=True)
-        if r.status_code in (401, 403):
+        if r.status_code == 401:
             raise ErrorFacturador(f"La API Key de {self.nombre} no es válida o fue revocada.", reintentable=False)
         if r.status_code >= 400:
-            try:
-                detalle = r.json().get("detail", r.text)
-            except Exception:
-                detalle = r.text
-            raise ErrorFacturador(f"{self.nombre} rechazó la emisión: {detalle}", reintentable=False)
+            raise ErrorFacturador(f"{self.nombre} rechazó la emisión ({r.status_code}): {detalle}",
+                                  reintentable=self._es_transitorio(r.status_code, r))
         try:
             return r.json() or {}
         except Exception:
             raise ErrorFacturador(f"{self.nombre} respondió algo que no se entiende.", reintentable=True)
+
+    @staticmethod
+    def _json(r: httpx.Response):
+        try:
+            return r.json()
+        except Exception:
+            return None
+
+    def _detalle(self, r: httpx.Response) -> str:
+        """El mensaje legible del facturador, venga como texto, lista o diccionario."""
+        datos = self._json(r)
+        detalle = datos.get("detail", datos) if isinstance(datos, dict) else (datos or r.text)
+        if isinstance(detalle, dict):
+            detalle = detalle.get("error_real") or detalle
+        return str(detalle)[:400]
+
+    def _es_transitorio(self, status: int, r: httpx.Response) -> bool:
+        """¿Este 4xx es en realidad un fallo pasajero del facturador? Cada conector lo afina."""
+        return False
 
     def ping(self) -> None:
         self._llamar("GET", self.ruta_ping)

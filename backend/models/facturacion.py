@@ -14,7 +14,7 @@ from decimal import Decimal
 from typing import Optional
 
 from sqlalchemy import (DateTime, ForeignKey, Integer, JSON, Numeric, String, Text, UniqueConstraint, func,
-                        true)
+                        false, true)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from database import Base
@@ -31,6 +31,9 @@ class IntegracionFacturacion(Base):
     proveedor:  Mapped[ProveedorFacturacion] = mapped_column(columna_enum(ProveedorFacturacion))
     api_key_cifrada: Mapped[str] = mapped_column(Text)
     activo:     Mapped[bool] = mapped_column(default=True, server_default=true())
+    # Al cerrarse la mesa (pagada) se emite sola la boleta, sin que el cajero haga nada.
+    emision_automatica: Mapped[bool] = mapped_column(default=False, server_default=false())
+    tipo_automatico:    Mapped[TipoDocumento] = mapped_column(columna_enum(TipoDocumento), default=TipoDocumento.boleta)
     actualizado_en: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), onupdate=func.now())
 
 
@@ -55,8 +58,10 @@ class DocumentoTributario(Base):
     idempotency_key: Mapped[str] = mapped_column(String(80))
 
     receptor:    Mapped[dict] = mapped_column(JSON, default=dict)      # lo que se mandó (rut, nombre, giro...)
-    moneda:      Mapped[Optional[str]] = mapped_column(String(10))
-    tasa_cambio: Mapped[Optional[Decimal]] = mapped_column(Numeric(18, 6))   # Venezuela: tasa del día (YeparFX)
+    moneda:      Mapped[Optional[str]] = mapped_column(String(10))           # moneda en que vendió el restaurante
+    moneda_montos: Mapped[Optional[str]] = mapped_column(String(10))         # moneda de neto/iva/total (VE: VES)
+    tasa_cambio: Mapped[Optional[Decimal]] = mapped_column(Numeric(18, 6))   # VE: la congela YeparFactura (BCV vía YeparFX)
+    total_divisa: Mapped[Optional[Decimal]] = mapped_column(DINERO)          # VE: total en la moneda original
 
     folio:     Mapped[Optional[str]] = mapped_column(String(40))
     neto:      Mapped[Optional[Decimal]] = mapped_column(DINERO)

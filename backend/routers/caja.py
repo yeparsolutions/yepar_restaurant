@@ -19,7 +19,7 @@ from esquemas import (AbrirTurnoIn, ArqueoOut, CajaOut, ConfigCobroIn, ConfigCob
                       CuadreTerminalOut, DescuentoIn, EntregaPropinaIn, EntregaPropinaOut, NombreIn, PagoIn,
                       PagoOut, ParteRepartoOut, PedidoOut, PropinaIn, PropinaLibroOut, RepartoIn,
                       ResumenPeriodoOut, SaldoPropinaOut, TerminalOut, TurnoConDiferenciaOut, TurnoOut)
-from models import EstadoPropina, MedioPago, ModoPropina, RolUsuario, Usuario
+from models import EstadoPedido, EstadoPropina, MedioPago, ModoPropina, RolUsuario, Usuario
 from routers.comun import exigir_ser_el_mesero, pedido_out
 from seguridad import es_admin, exigir_roles, resolver_sucursal, roles_de
 from servicios import caja as svc_caja
@@ -27,6 +27,7 @@ from servicios import cierre as svc_cierre
 from servicios import cobro as svc_cobro
 from servicios import pedidos as svc_pedidos
 from servicios import propinas as svc_propinas
+from servicios.facturacion import emision as svc_facturacion
 
 router = APIRouter(tags=["caja"])
 
@@ -188,13 +189,20 @@ def pagar(pedido_id: str, datos: PagoIn, db: Session = Depends(get_db), usuario:
         db, empresa_id=usuario.empresa_id, pedido_id=pedido.id, usuario_id=usuario.id, medio=MedioPago(datos.medio),
         monto=datos.monto, recibido=datos.recibido, numero_operacion=datos.numero_operacion,
         terminal_id=datos.terminal_id, pago_id=datos.pago_id)
-    db.commit()
+    db.commit()                                        # el cobro queda firme pase lo que pase con la factura
+    documento = None
+    if pedido.estado == EstadoPedido.cerrado:
+        documento = svc_facturacion.emitir_automatico(db, empresa_id=usuario.empresa_id, usuario_id=usuario.id,
+                                                      pedido_id=pedido.id)
+        db.commit()
     vuelto = (pago.recibido - pago.monto) if pago.recibido is not None else None
     cuenta = pedido_out(db, pedido)
     return PagoOut(id=pago.id, pedido_id=pago.pedido_id, medio=pago.medio.value, monto=pago.monto,
                    recibido=pago.recibido, vuelto=vuelto, numero_operacion=pago.numero_operacion,
                    terminal_id=pago.terminal_id, turno_id=pago.turno_id, pedido_estado=cuenta.estado,
-                   cuenta=cuenta.cuenta)
+                   cuenta=cuenta.cuenta,
+                   documento_estado=documento.estado.value if documento else None,
+                   documento_folio=documento.folio if documento else None)
 
 
 # ── Propinas ─────────────────────────────────────────────────
