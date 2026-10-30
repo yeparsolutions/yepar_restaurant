@@ -556,6 +556,8 @@ class PagoOut(BaseModel):
     turno_id: Optional[int] = None
     pedido_estado: str
     cuenta: CuentaOut
+    documento_estado: Optional[str] = None      # si se emitió sola la boleta al cerrar la mesa
+    documento_folio: Optional[str] = None
 
 
 class PropinaLibroOut(BaseModel):
@@ -628,20 +630,28 @@ class ConexionFacturacionOut(BaseModel):
     proveedor: str
     activo: bool
     api_key_final: str                     # "••••1234": nunca se devuelve la clave completa
+    emision_automatica: bool = False
+    tipo_automatico: str = "boleta"
 
 
 class ReceptorIn(Entrada):
     rut: Optional[str] = Field(default=None, max_length=20)
     nombre: Optional[str] = Field(default=None, max_length=200)
+    cedula: Optional[str] = Field(default=None, max_length=30)      # Venezuela: cédula o pasaporte
     giro: Optional[str] = Field(default=None, max_length=200)
     direccion: Optional[str] = Field(default=None, max_length=300)
     email: Optional[str] = Field(default=None, max_length=200)
+    telefono: Optional[str] = Field(default=None, max_length=40)
 
 
 class EmitirDocumentoIn(Entrada):
     tipo: Literal["boleta", "factura"]
     receptor: Optional[ReceptorIn] = None
-    tasa_cambio: Optional[Decimal] = None   # Venezuela: tasa del día (de YeparFX)
+
+
+class ConfigFacturacionIn(Entrada):
+    emision_automatica: Optional[bool] = None
+    tipo_automatico: Optional[Literal["boleta", "factura"]] = None
 
 
 class DocumentoOut(BaseModel):
@@ -655,7 +665,9 @@ class DocumentoOut(BaseModel):
     iva: Optional[Dinero] = None
     total: Optional[Dinero] = None
     pdf_url: Optional[str] = None
-    moneda: Optional[str] = None
+    moneda: Optional[str] = None            # moneda en que vendió el restaurante
+    moneda_montos: Optional[str] = None     # moneda de neto/iva/total (Venezuela: VES)
     tasa_cambio: Optional[CostoUnitario] = None
+    total_divisa: Optional[Dinero] = None
     intentos: int
     ultimo_error: Optional[str] = None
