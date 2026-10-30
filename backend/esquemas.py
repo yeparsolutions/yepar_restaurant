@@ -370,3 +370,96 @@ class CostoRecetaOut(BaseModel):
     precio_venta: Optional[Dinero] = None
     margen_pct: Optional[Porcentaje] = None    # (precio − costo) / precio, solo en vendibles con precio
     lineas: list[CostoLineaOut]
+
+
+# ── Inventario ───────────────────────────────────────────────
+class CompraIn(Entrada):
+    """Ingreso de mercadería. Cantidad: con `unidad`, con `presentacion_id` o ya en base.
+    Costo: `monto_neto` (toda la línea, sin IVA) O `costo_unitario_base`."""
+    item_id: int
+    cantidad: Decimal
+    unidad: Optional[str] = None
+    presentacion_id: Optional[int] = None
+    monto_neto: Optional[Decimal] = None
+    costo_unitario_base: Optional[Decimal] = None
+    nota: Optional[str] = Field(default=None, max_length=255)
+
+
+class CompraOut(BaseModel):
+    movimiento_id: int
+    item_id: int
+    cantidad_base: Cantidad
+    costo_unitario_base: CostoUnitario
+    costo_promedio: CostoUnitario
+    costo_referencia: CostoUnitario
+    stock_nuevo: Cantidad
+
+
+class ProduccionIn(Entrada):
+    item_id: int
+    cantidad_producida: Optional[Decimal] = None      # en unidad base; si falta, el rendimiento de la receta
+    nota: Optional[str] = Field(default=None, max_length=255)
+
+
+class ProduccionOut(BaseModel):
+    lote_id: int
+    item_id: int
+    cantidad_producida: Cantidad
+    costo_total: Dinero
+    costo_unitario: CostoUnitario
+    faltantes: list[str]
+
+
+class MermaIn(Entrada):
+    item_id: int
+    cantidad: Decimal                                  # positiva, en unidad base
+    motivo: Literal["vencido", "danado", "error_preparacion", "sobrante", "derrame"]
+    nota: Optional[str] = Field(default=None, max_length=255)
+
+
+class MovimientoOut(BaseModel):
+    id: int
+    item_id: int
+    tipo: str
+    cantidad: Cantidad
+    stock_anterior: Cantidad
+    stock_nuevo: Cantidad
+    motivo_merma: Optional[str] = None
+    referencia_tipo: Optional[str] = None
+    referencia_id: Optional[str] = None
+    nota: Optional[str] = None
+
+
+class StockOut(BaseModel):
+    item_id: int
+    nombre: str
+    tipo: str
+    unidad: str
+    fisico: Cantidad
+    reservado: Cantidad
+    disponible: Cantidad
+    stock_minimo: Cantidad
+
+
+class AlertaOut(BaseModel):
+    item_id: int
+    nombre: str
+    tipo: str
+    disponible: Cantidad
+    stock_minimo: Cantidad
+    se_produce: bool
+
+
+class LineaCompraOut(BaseModel):
+    item_id: int
+    nombre: str
+    cantidad_base: Cantidad
+    unidad: str
+    presentacion: Optional[str] = None
+    cantidad_presentacion: Optional[int] = None
+    costo_estimado: Dinero
+
+
+class ListaComprasOut(BaseModel):
+    lineas: list[LineaCompraOut]
+    costo_total_estimado: Dinero
