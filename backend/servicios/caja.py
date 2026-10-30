@@ -177,3 +177,22 @@ def revisar_turno(db: Session, *, empresa_id: int, turno_id: int, usuario_id: in
     turno.revisado_en = _ahora()
     db.flush()
     return turno
+
+
+# ------------------------------------------------------------
+# Consultas
+# ------------------------------------------------------------
+def listar_cajas(db: Session, *, empresa_id: int, sucursal_id: int) -> list:
+    validar_sucursal(db, empresa_id, sucursal_id)
+    return db.query(Caja).filter_by(empresa_id=empresa_id, sucursal_id=sucursal_id, activa=True).order_by(Caja.nombre).all()
+
+
+def listar_terminales(db: Session, *, empresa_id: int, sucursal_id: int) -> list:
+    validar_sucursal(db, empresa_id, sucursal_id)
+    return (db.query(TerminalPago).filter_by(empresa_id=empresa_id, sucursal_id=sucursal_id, activo=True)
+            .order_by(TerminalPago.nombre).all())
+
+
+def turno_para_ver(db: Session, *, empresa_id: int, turno_id: int) -> TurnoCaja:
+    """Carga un turno del restaurante (404 si es de otro cliente)."""
+    return _cargar_turno(db, empresa_id, turno_id)

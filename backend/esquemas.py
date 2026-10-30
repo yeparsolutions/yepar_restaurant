@@ -463,3 +463,156 @@ class LineaCompraOut(BaseModel):
 class ListaComprasOut(BaseModel):
     lineas: list[LineaCompraOut]
     costo_total_estimado: Dinero
+
+
+# ── Caja, cobro, propinas y cierre ───────────────────────────
+class NombreIn(Entrada):
+    nombre: str = Field(min_length=1, max_length=60)
+    sucursal_id: Optional[int] = None
+
+
+class CajaOut(BaseModel):
+    id: int
+    nombre: str
+    sucursal_id: int
+
+
+class TerminalOut(BaseModel):
+    id: int
+    nombre: str
+    sucursal_id: int
+
+
+class AbrirTurnoIn(Entrada):
+    caja_id: int
+    fondo: Decimal = Decimal("0")
+
+
+class CerrarTurnoIn(Entrada):
+    contado: Decimal
+    nota: Optional[str] = Field(default=None, max_length=300)
+
+
+class ArqueoOut(BaseModel):
+    turno_id: int
+    fondo: Dinero
+    efectivo_cobrado: Dinero
+    esperado: Dinero
+    cantidad_pagos: int
+
+
+class TurnoOut(BaseModel):
+    id: int
+    caja_id: int
+    caja: str
+    usuario_id: int
+    estado: str
+    abierto_en: Optional[datetime] = None
+    fondo: Dinero
+    cerrado_en: Optional[datetime] = None
+    esperado: Optional[Dinero] = None
+    contado: Optional[Dinero] = None
+    diferencia: Optional[Dinero] = None
+    nota: Optional[str] = None
+    revisado_por_id: Optional[int] = None
+
+
+class ConfigCobroIn(Entrada):
+    propina_modo: Optional[Literal["por_mesa", "grupal"]] = None
+    propina_sugerida_pct: Optional[Decimal] = None
+
+
+class ConfigCobroOut(BaseModel):
+    propina_modo: str
+    propina_sugerida_pct: Porcentaje
+
+
+class PropinaIn(Entrada):
+    monto: Optional[Decimal] = None          # sin monto: la sugerida del restaurante
+
+
+class DescuentoIn(Entrada):
+    porcentaje: Decimal
+
+
+class PagoIn(Entrada):
+    medio: Literal["efectivo", "tarjeta", "transferencia"]
+    monto: Decimal
+    recibido: Optional[Decimal] = None       # solo efectivo
+    numero_operacion: Optional[str] = Field(default=None, max_length=60)
+    terminal_id: Optional[int] = None        # solo tarjeta
+    pago_id: Optional[str] = Field(default=None, min_length=8, max_length=36)   # UUID de la tablet (modo sin conexión)
+
+
+class PagoOut(BaseModel):
+    id: str
+    pedido_id: str
+    medio: str
+    monto: Dinero
+    recibido: Optional[Dinero] = None
+    vuelto: Optional[Dinero] = None
+    numero_operacion: Optional[str] = None
+    terminal_id: Optional[int] = None
+    turno_id: Optional[int] = None
+    pedido_estado: str
+    cuenta: CuentaOut
+
+
+class PropinaLibroOut(BaseModel):
+    id: int
+    pedido_id: Optional[str] = None
+    mesero_id: Optional[int] = None
+    modo: str
+    monto: Dinero
+    estado: str
+    creado_en: Optional[datetime] = None
+
+
+class SaldoPropinaOut(BaseModel):
+    mesero_id: Optional[int] = None          # vacío = fondo grupal sin repartir
+    monto: Dinero
+
+
+class EntregaPropinaIn(Entrada):
+    mesero_id: int
+
+
+class EntregaPropinaOut(BaseModel):
+    mesero_id: int
+    entregado: Dinero
+
+
+class RepartoIn(Entrada):
+    """Partes iguales entre `participantes`, o proporcional con `pesos` ({id_usuario: peso}). Uno de los dos."""
+    participantes: Optional[list[int]] = None
+    pesos: Optional[dict[int, Decimal]] = None
+
+
+class ParteRepartoOut(BaseModel):
+    usuario_id: int
+    monto: Dinero
+
+
+class CuadreTerminalOut(BaseModel):
+    terminal_id: int
+    nombre: str
+    cantidad: int
+    total_registrado: Dinero
+    total_reportado: Optional[Dinero] = None
+    diferencia: Optional[Dinero] = None
+    operaciones: list[list[str]]             # [[numero_operacion, monto], ...]
+
+
+class TurnoConDiferenciaOut(BaseModel):
+    turno_id: int
+    diferencia: Dinero
+
+
+class ResumenPeriodoOut(BaseModel):
+    cerradas: int
+    ventas: Dinero
+    descuentos: Dinero
+    propinas: Dinero
+    total_cobrado: Dinero
+    por_medio: dict[str, Dinero]
+    turnos_con_diferencia: list[TurnoConDiferenciaOut]
