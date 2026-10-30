@@ -649,6 +649,10 @@ class EmitirDocumentoIn(Entrada):
     receptor: Optional[ReceptorIn] = None
 
 
+class AnularDocumentoIn(Entrada):
+    motivo: str = Field(min_length=3, max_length=200)
+
+
 class ConfigFacturacionIn(Entrada):
     emision_automatica: Optional[bool] = None
     tipo_automatico: Optional[Literal["boleta", "factura"]] = None
@@ -659,7 +663,9 @@ class DocumentoOut(BaseModel):
     pedido_id: str
     proveedor: str
     tipo: str
-    estado: str                            # pendiente | emitido | rechazado
+    estado: str                            # pendiente | emitido | rechazado | anulado
+    documento_origen_id: Optional[int] = None   # nota de crédito: el documento que anula
+    motivo: Optional[str] = None
     folio: Optional[str] = None
     neto: Optional[Dinero] = None
     iva: Optional[Dinero] = None

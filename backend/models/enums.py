@@ -153,9 +153,11 @@ class ProveedorFacturacion(str, enum.Enum):
 class TipoDocumento(str, enum.Enum):
     boleta  = "boleta"              # consumidor final (Chile)
     factura = "factura"             # con datos del receptor (Chile y Venezuela)
+    nota_credito = "nota_credito"   # anula un documento ya emitido (siempre apunta a su original)
 
 
 class EstadoDocumento(str, enum.Enum):
     pendiente = "pendiente"         # no se pudo confirmar con el facturador (sin red, tardó): se reintenta
     emitido   = "emitido"           # el facturador devolvió el folio
     rechazado = "rechazado"         # el facturador lo rechazó (datos inválidos): se corrige y se reintenta
+    anulado   = "anulado"           # ya tiene su nota de crédito emitida

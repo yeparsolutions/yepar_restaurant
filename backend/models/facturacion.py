@@ -40,8 +40,8 @@ class IntegracionFacturacion(Base):
 class DocumentoTributario(Base):
     __tablename__ = "documentos_tributarios"
     __table_args__ = (
-        # Una cuenta tiene a lo sumo UN documento: reintentar nunca duplica el folio.
-        UniqueConstraint("pedido_id", name="uq_documento_pedido"),
+        # Una cuenta tiene UN documento de venta (boleta/factura) y a lo sumo una nota de crédito por
+        # documento: se garantiza con la clave de idempotencia ("yrs-<pedido>" / "yrs-nc-<id del documento>").
         UniqueConstraint("empresa_id", "idempotency_key", name="uq_documento_clave"),
     )
 
@@ -56,6 +56,10 @@ class DocumentoTributario(Base):
                                                             default=EstadoDocumento.pendiente)
     # Clave estable que se envía al facturador: ante un reintento devuelve el mismo folio.
     idempotency_key: Mapped[str] = mapped_column(String(80))
+
+    # Nota de crédito: el documento que anula y por qué.
+    documento_origen_id: Mapped[Optional[int]] = mapped_column(ForeignKey("documentos_tributarios.id"))
+    motivo:              Mapped[Optional[str]] = mapped_column(String(200))
 
     receptor:    Mapped[dict] = mapped_column(JSON, default=dict)      # lo que se mandó (rut, nombre, giro...)
     moneda:      Mapped[Optional[str]] = mapped_column(String(10))           # moneda en que vendió el restaurante

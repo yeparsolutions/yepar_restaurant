@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from database import get_db
-from esquemas import (ConexionFacturacionIn, ConexionFacturacionOut, ConfigFacturacionIn, DocumentoOut,
+from esquemas import (AnularDocumentoIn, ConexionFacturacionIn, ConexionFacturacionOut, ConfigFacturacionIn, DocumentoOut,
                       EmitirDocumentoIn)
 from models import EstadoDocumento, ProveedorFacturacion, RolUsuario, TipoDocumento, Usuario
 from seguridad import exigir_roles
@@ -25,7 +25,7 @@ solo_caja = exigir_roles(RolUsuario.cajero)
 def documento_out(d) -> DocumentoOut:
     return DocumentoOut(
         id=d.id, pedido_id=d.pedido_id, proveedor=d.proveedor.value, tipo=d.tipo.value, estado=d.estado.value,
-        folio=d.folio, neto=d.neto, iva=d.iva, total=d.total, pdf_url=d.pdf_url, moneda=d.moneda,
+        documento_origen_id=d.documento_origen_id, motivo=d.motivo, folio=d.folio, neto=d.neto, iva=d.iva, total=d.total, pdf_url=d.pdf_url, moneda=d.moneda,
         moneda_montos=d.moneda_montos, tasa_cambio=d.tasa_cambio, total_divisa=d.total_divisa, intentos=d.intentos,
         ultimo_error=d.ultimo_error)
 
@@ -88,6 +88,25 @@ def emitir(pedido_id: str, datos: EmitirDocumentoIn, db: Session = Depends(get_d
 @router.get("/pedidos/{pedido_id}/documento", response_model=DocumentoOut)
 def ver_documento(pedido_id: str, db: Session = Depends(get_db), usuario: Usuario = Depends(solo_caja)):
     return documento_out(svc.documento_de_pedido(db, empresa_id=usuario.empresa_id, pedido_id=pedido_id))
+
+
+@router.post("/documentos/{documento_id}/anular", response_model=DocumentoOut)
+def anular(documento_id: int, datos: AnularDocumentoIn, db: Session = Depends(get_db),
+           usuario: Usuario = Depends(solo_admin)):
+    """
+    Anula un documento emitido con una nota de crédito (solo el administrador). Repetirlo es seguro.
+    Respuestas: 200 nota emitida · 202 pendiente (el facturador no respondió) · 422 rechazada.
+    """
+    nota = svc.anular_documento(db, empresa_id=usuario.empresa_id, usuario_id=usuario.id, documento_id=documento_id,
+                                motivo=datos.motivo)
+    db.commit()
+    salida = documento_out(nota)
+    if nota.estado == EstadoDocumento.rechazado:
+        raise HTTPException(status_code=422, detail=nota.ultimo_error or "El facturador rechazó la nota de crédito.")
+    if nota.estado == EstadoDocumento.pendiente:
+        from fastapi.responses import JSONResponse
+        return JSONResponse(status_code=202, content=salida.model_dump(mode="json"))
+    return salida
 
 
 @router.get("/documentos", response_model=list[DocumentoOut])
