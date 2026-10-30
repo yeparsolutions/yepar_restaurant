@@ -16,3 +16,4 @@ sqlalchemy==2.0.41
 psycopg2-binary==2.9.11   # conexión a PostgreSQL (producción)
 pytest==9.1.1             # pruebas
 cryptography==50.0.1      # cifrado de las API Key de los facturadores
+alembic==1.20.1           # migraciones de la base de datos
