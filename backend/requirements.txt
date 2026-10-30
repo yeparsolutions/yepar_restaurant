@@ -15,3 +15,4 @@ httpx==0.28.1             # cliente HTTP para las pruebas de la API
 sqlalchemy==2.0.41
 psycopg2-binary==2.9.11   # conexión a PostgreSQL (producción)
 pytest==9.1.1             # pruebas
+cryptography==50.0.1      # cifrado de las API Key de los facturadores

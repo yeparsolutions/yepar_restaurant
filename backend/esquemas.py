@@ -616,3 +616,46 @@ class ResumenPeriodoOut(BaseModel):
     total_cobrado: Dinero
     por_medio: dict[str, Dinero]
     turnos_con_diferencia: list[TurnoConDiferenciaOut]
+
+
+# ── Facturación electrónica ──────────────────────────────────
+class ConexionFacturacionIn(Entrada):
+    proveedor: Literal["yepardte", "yeparfactura"]
+    api_key: str = Field(min_length=8, max_length=200)
+
+
+class ConexionFacturacionOut(BaseModel):
+    proveedor: str
+    activo: bool
+    api_key_final: str                     # "••••1234": nunca se devuelve la clave completa
+
+
+class ReceptorIn(Entrada):
+    rut: Optional[str] = Field(default=None, max_length=20)
+    nombre: Optional[str] = Field(default=None, max_length=200)
+    giro: Optional[str] = Field(default=None, max_length=200)
+    direccion: Optional[str] = Field(default=None, max_length=300)
+    email: Optional[str] = Field(default=None, max_length=200)
+
+
+class EmitirDocumentoIn(Entrada):
+    tipo: Literal["boleta", "factura"]
+    receptor: Optional[ReceptorIn] = None
+    tasa_cambio: Optional[Decimal] = None   # Venezuela: tasa del día (de YeparFX)
+
+
+class DocumentoOut(BaseModel):
+    id: int
+    pedido_id: str
+    proveedor: str
+    tipo: str
+    estado: str                            # pendiente | emitido | rechazado
+    folio: Optional[str] = None
+    neto: Optional[Dinero] = None
+    iva: Optional[Dinero] = None
+    total: Optional[Dinero] = None
+    pdf_url: Optional[str] = None
+    moneda: Optional[str] = None
+    tasa_cambio: Optional[CostoUnitario] = None
+    intentos: int
+    ultimo_error: Optional[str] = None
