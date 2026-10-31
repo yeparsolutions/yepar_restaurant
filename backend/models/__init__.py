@@ -9,6 +9,7 @@ from models.enums import (EstacionCocina, EstadoPropina, EstadoTurno, MedioPago,
                           TipoDocumento, EstadoCompra, EstadoInventarioFisico)
 from models.compras import Compra, CompraLinea
 from models.conteo import InventarioFisico, InventarioFisicoLinea
+from models.sync import OperacionSync
 from models.facturacion import DocumentoTributario, IntegracionFacturacion
 from models.inventario import (CategoriaItem, Extra, ExtraPlato, Item,
                                ItemPresentacion, LoteProduccion,
@@ -31,4 +32,5 @@ __all__ = [
     "Empresa", "Sucursal", "Usuario", "UsuarioRol",
     "EstadoDocumento", "ProveedorFacturacion", "TipoDocumento", "DocumentoTributario", "IntegracionFacturacion",
     "EstadoCompra", "EstadoInventarioFisico", "Compra", "CompraLinea", "InventarioFisico", "InventarioFisicoLinea",
+    "OperacionSync",
 ]

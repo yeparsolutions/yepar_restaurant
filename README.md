@@ -86,7 +86,7 @@ uvicorn main:app --host 0.0.0.0 --port $PORT
 - **Modo sin conexión:** pedidos, platos y pagos aceptan un UUID generado por la tablet; sincronizar dos veces se rechaza en vez de duplicar.
 - **Sucursal:** el personal trabaja en su local; el administrador sin local fijo indica `sucursal_id`.
 
-## Mapa de la API (89 endpoints)
+## Mapa de la API (90 endpoints)
 
 **Sesión** — `POST /auth/login` · `GET /auth/yo`
 
@@ -116,6 +116,9 @@ uvicorn main:app --host 0.0.0.0 --port $PORT
 `POST|GET /inventario-fisico` · `GET /inventario-fisico/activo` · `POST /inventario-fisico/{id}/contar` ·
 `POST /inventario-fisico/{id}/finalizar-conteo` · `GET /inventario-fisico/{id}/revision` · `POST /inventario-fisico/{id}/recontar` ·
 `POST /inventario-fisico/{id}/cerrar` · `POST /inventario-fisico/{id}/cancelar`
+
+**Sincronización sin conexión (mesero)**
+`POST /sync/operaciones` — sube en orden lo hecho sin internet (abrir mesa, tomar, quitar, enviar, cancelar, pedir cuenta, anular)
 
 **Caja y cobro (cajero; el mesero anota propina y cobra tarjeta o transferencia en sus mesas)**
 `POST|GET /cajas` · `POST|GET /terminales` · `POST /turnos` · `GET /turnos/actual` · `GET /turnos/{id}/arqueo` ·
@@ -149,6 +152,14 @@ Reglas comunes:
 - **Dos llaves en la compra:** el administrador registra la factura (`por_recibir`, el stock no se mueve); el cocinero cuenta lo que llegó sin ver lo facturado ni los costos. El stock sube con lo **contado**, al costo de la factura; el administrador ve después facturado vs. recibido.
 - **Inventario físico:** se toma una foto del stock al abrir; quien cuenta no la ve. Al cerrar se aplica la **diferencia** (contado − foto) como ajuste, así las ventas hechas durante el conteo no se pisan. El administrador puede pedir recuento de ítems puntuales antes de cerrar. Un solo inventario en curso por sucursal.
 
+## Modo sin conexión
+
+La tablet genera los UUID (pedido, plato) y lleva una cola de operaciones. Al volver el internet baja plano y carta con `GET /mesas` y `GET /carta` y sube la cola con `POST /sync/operaciones`:
+
+- **En orden y por separado:** cada operación se confirma o se rechaza sola; una mala (mesa ocupada, plato sin precio) no frena las demás y vuelve con su motivo.
+- **Idempotente:** el `op_id` es la clave; reenviar lo mismo devuelve el resultado anterior sin repetirlo.
+- **Los cobros no van por la cola:** la tarjeta y la transferencia necesitan conexión; el efectivo se cobra en caja con internet.
+
 ## Decisiones de diseño del núcleo
 
 - **Unidad base única.** Todo el stock y las recetas se guardan en gramos, mililitros o unidades. Las compras en kg, litros o cajas se convierten al entrar.
@@ -162,5 +173,5 @@ Reglas comunes:
 
 ## Pendiente
 
-Frontend de la tablet, modo sin conexión (sincronización), integración con Yepar Go (delivery),
+Frontend de la tablet, integración con Yepar Go (delivery),
 carga masiva por Excel con asistente de arranque, PIN de supervisor para descuentos sobre el tope, y despliegue en Railway.
