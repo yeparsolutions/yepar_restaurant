@@ -95,6 +95,8 @@ class Pedido(Base):
     # Cobro: el descuento lo aplica el cajero (con su tope) y la propina la anota el mesero al pedir la cuenta.
     descuento:        Mapped[Decimal] = mapped_column(DINERO, default=Decimal("0"), server_default="0")
     descuento_por_id: Mapped[Optional[int]] = mapped_column(ForeignKey("usuarios.id", ondelete="SET NULL"))
+    # Si el descuento pasó del tope del cajero: el supervisor que lo autorizó con su PIN.
+    descuento_autorizado_por_id: Mapped[Optional[int]] = mapped_column(ForeignKey("usuarios.id", ondelete="SET NULL"))
     propina:          Mapped[Decimal] = mapped_column(DINERO, default=Decimal("0"), server_default="0")
 
     abierto_en:        Mapped[datetime]           = mapped_column(DateTime(timezone=True), server_default=func.now())

@@ -174,7 +174,8 @@ def aplicar_descuento(pedido_id: str, datos: DescuentoIn, db: Session = Depends(
     """Descuento en % (el cajero hasta su tope personal; el administrador sin tope)."""
     pedido = svc_pedidos.cargar_pedido(db, usuario.empresa_id, pedido_id)
     svc_cobro.aplicar_descuento(db, empresa_id=usuario.empresa_id, pedido_id=pedido.id, usuario_id=usuario.id,
-                                porcentaje=datos.porcentaje)
+                                porcentaje=datos.porcentaje, supervisor_id=datos.supervisor_id,
+                                pin_supervisor=datos.pin_supervisor)
     db.commit()
     return pedido_out(db, pedido)
 
