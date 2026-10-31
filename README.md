@@ -86,7 +86,7 @@ uvicorn main:app --host 0.0.0.0 --port $PORT
 - **Modo sin conexión:** pedidos, platos y pagos aceptan un UUID generado por la tablet; sincronizar dos veces se rechaza en vez de duplicar.
 - **Sucursal:** el personal trabaja en su local; el administrador sin local fijo indica `sucursal_id`.
 
-## Mapa de la API (90 endpoints)
+## Mapa de la API (94 endpoints)
 
 **Sesión** — `POST /auth/login` · `GET /auth/yo`
 
@@ -120,6 +120,9 @@ uvicorn main:app --host 0.0.0.0 --port $PORT
 **Sincronización sin conexión (mesero)**
 `POST /sync/operaciones` — sube en orden lo hecho sin internet (abrir mesa, tomar, quitar, enviar, cancelar, pedir cuenta, anular)
 
+**Carga masiva y arranque (administrador)**
+`GET /carga-masiva/plantilla` · `POST /carga-masiva/validar` · `POST /carga-masiva/importar` · `GET /carga-masiva/asistente`
+
 **Caja y cobro (cajero; el mesero anota propina y cobra tarjeta o transferencia en sus mesas)**
 `POST|GET /cajas` · `POST|GET /terminales` · `POST /turnos` · `GET /turnos/actual` · `GET /turnos/{id}/arqueo` ·
 `POST /turnos/{id}/cerrar` · `POST /turnos/{id}/revisar` · `GET|PUT /configuracion/cobro` ·
@@ -152,6 +155,15 @@ Reglas comunes:
 - **Dos llaves en la compra:** el administrador registra la factura (`por_recibir`, el stock no se mueve); el cocinero cuenta lo que llegó sin ver lo facturado ni los costos. El stock sube con lo **contado**, al costo de la factura; el administrador ve después facturado vs. recibido.
 - **Inventario físico:** se toma una foto del stock al abrir; quien cuenta no la ve. Al cerrar se aplica la **diferencia** (contado − foto) como ajuste, así las ventas hechas durante el conteo no se pisan. El administrador puede pedir recuento de ítems puntuales antes de cerrar. Un solo inventario en curso por sucursal.
 
+## Carga masiva por Excel
+
+El administrador descarga la plantilla (`insumos`, `platos`, `recetas`), la llena y la sube. **Todo o nada:** `validar` revisa sin guardar; `importar` guarda solo si no hay ningún error y, si lo hay, responde 422 con la hoja y la fila de cada problema.
+
+- Las unidades se dicen en lo cotidiano (kg, l, und); el sistema las guarda en unidad base (g, ml, und). El costo se da por esa misma unidad y sin IVA.
+- El stock inicial entra como compra en la sucursal elegida; los componentes se producen y los platos preparados no tienen stock propio.
+- Solo crea: un nombre que ya existe, o un plato que ya tiene receta, se rechaza (no pisa datos).
+- `GET /carga-masiva/asistente` es la lista de arranque (sucursal, insumos, carta, recetas, stock, mesas, personal, caja, propina, facturador) con lo hecho y el siguiente paso.
+
 ## Modo sin conexión
 
 La tablet genera los UUID (pedido, plato) y lleva una cola de operaciones. Al volver el internet baja plano y carta con `GET /mesas` y `GET /carta` y sube la cola con `POST /sync/operaciones`:
@@ -174,4 +186,4 @@ La tablet genera los UUID (pedido, plato) y lleva una cola de operaciones. Al vo
 ## Pendiente
 
 Frontend de la tablet, integración con Yepar Go (delivery),
-carga masiva por Excel con asistente de arranque, PIN de supervisor para descuentos sobre el tope, y despliegue en Railway.
+PIN de supervisor para descuentos sobre el tope, y despliegue en Railway.
