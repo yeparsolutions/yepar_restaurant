@@ -86,7 +86,7 @@ uvicorn main:app --host 0.0.0.0 --port $PORT
 - **Modo sin conexión:** pedidos, platos y pagos aceptan un UUID generado por la tablet; sincronizar dos veces se rechaza en vez de duplicar.
 - **Sucursal:** el personal trabaja en su local; el administrador sin local fijo indica `sucursal_id`.
 
-## Mapa de la API (97 endpoints)
+## Mapa de la API (105 endpoints)
 
 **Sesión** — `POST /auth/login` · `GET /auth/yo`
 
@@ -119,6 +119,10 @@ uvicorn main:app --host 0.0.0.0 --port $PORT
 
 **Sincronización sin conexión (mesero)**
 `POST /sync/operaciones` — sube en orden lo hecho sin internet (abrir mesa, tomar, quitar, enviar, cancelar, pedir cuenta, anular)
+
+**Equipo (administrador)**
+`GET|POST /sucursales` · `PATCH /sucursales/{id}` · `GET|POST /personal` · `PATCH /personal/{id}` ·
+`POST /personal/{id}/password` · `POST /auth/cambiar-password` (cualquier persona, la propia)
 
 **PIN de supervisor (el administrador lo define; el cajero consulta a quién llamar)**
 `PUT|DELETE /supervisor/pin` · `GET /supervisores`
@@ -157,6 +161,12 @@ Reglas comunes:
 
 - **Dos llaves en la compra:** el administrador registra la factura (`por_recibir`, el stock no se mueve); el cocinero cuenta lo que llegó sin ver lo facturado ni los costos. El stock sube con lo **contado**, al costo de la factura; el administrador ve después facturado vs. recibido.
 - **Inventario físico:** se toma una foto del stock al abrir; quien cuenta no la ve. Al cerrar se aplica la **diferencia** (contado − foto) como ajuste, así las ventas hechas durante el conteo no se pisan. El administrador puede pedir recuento de ítems puntuales antes de cerrar. Un solo inventario en curso por sucursal.
+
+## Equipo y alta de restaurantes
+
+- `python crear_restaurante.py ...` da de alta un restaurante nuevo (sucursal + administrador) y entrega el **código de acceso** de 8 letras con que el equipo inicia sesión.
+- El administrador crea sucursales y personal. El personal que no es administrador trabaja en una sucursal; el cocinero lleva estación (cocina o barra).
+- El restaurante nunca se queda sin un administrador activo; una persona dada de baja no puede iniciar sesión pero conserva su historial.
 
 ## PIN de supervisor
 
@@ -197,4 +207,6 @@ La tablet genera los UUID (pedido, plato) y lleva una cola de operaciones. Al vo
 ## Pendiente
 
 Frontend de la tablet, integración con Yepar Go (delivery),
-y despliegue en Railway.
+y probar las migraciones contra un PostgreSQL real.
+
+**Despliegue:** ver [`docs/DESPLIEGUE.md`](docs/DESPLIEGUE.md).
