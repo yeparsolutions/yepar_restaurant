@@ -11,13 +11,9 @@
 from decimal import Decimal
 
 import pytest
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
 
-import models  # noqa: F401  (registra todos los modelos)
-from database import Base
 from models import (Empresa, Extra, Item, ItemPresentacion, MotivoMerma,
                     MovimientoStock, Receta, RecetaLinea, StockSucursal,
                     Sucursal, TipoItem, TipoMovimientoStock, Unidad, Usuario,
@@ -28,34 +24,7 @@ from unidades import (ErrorUnidades, a_decimal, convertir_a_unidad_base,
                       costo_promedio_ponderado, exigir_unidad_base)
 
 
-# ── Preparación: una base de datos limpia por cada prueba ────
-@pytest.fixture()
-def db():
-    engine = create_engine("sqlite://", poolclass=StaticPool,
-                           connect_args={"check_same_thread": False})
-    Base.metadata.create_all(bind=engine)
-    sesion = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)()
-    yield sesion
-    sesion.close()
-    engine.dispose()
-
-
-@pytest.fixture()
-def u(db):
-    """Catálogo de unidades sembrado: u['kg'], u['g'], u['ml']..."""
-    return sembrar_unidades(db)
-
-
-@pytest.fixture()
-def local(db):
-    """Un restaurante con una sucursal."""
-    empresa = Empresa(nombre="Hamburguesería Demo", codigo_acceso="DEMO0001")
-    db.add(empresa)
-    db.flush()
-    sucursal = Sucursal(empresa_id=empresa.id, nombre="Casa matriz")
-    db.add(sucursal)
-    db.commit()
-    return empresa, sucursal
+# Los fixtures db, u y local viven en conftest.py (compartidos por todas las pruebas).
 
 
 def crear_item(db, empresa, unidad_base, nombre, tipo=TipoItem.materia_prima, **extra):
