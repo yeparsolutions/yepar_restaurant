@@ -857,3 +857,35 @@ class SincronizarOut(BaseModel):
     resultados: list[ResultadoOperacionOut]
     aplicadas: int
     rechazadas: int
+
+
+# ── Carga masiva y asistente de arranque ─────────────────────
+class ErrorFilaOut(BaseModel):
+    hoja: str
+    fila: int
+    mensaje: str
+
+
+class ReporteCargaOut(BaseModel):
+    valido: bool
+    aplicado: bool                       # True solo si se importó de verdad
+    insumos: int
+    platos: int
+    recetas: int
+    con_stock_inicial: int
+    categorias_nuevas: int
+    errores: list[ErrorFilaOut]
+
+
+class PasoArranqueOut(BaseModel):
+    clave: str
+    titulo: str
+    hecho: bool
+    detalle: str
+
+
+class AsistenteOut(BaseModel):
+    pasos: list[PasoArranqueOut]
+    completados: int
+    total: int
+    siguiente: Optional[str] = None      # título del primer paso pendiente
