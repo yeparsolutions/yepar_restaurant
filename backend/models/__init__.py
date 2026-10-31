@@ -6,7 +6,9 @@
 
 from models.enums import (EstacionCocina, EstadoPropina, EstadoTurno, MedioPago, ModoPropina, EstadoLinea, EstadoPedido, EstadoReserva, FamiliaUnidad, MotivoMerma,
                           RolUsuario, TipoItem, TipoMovimientoStock, EstadoDocumento, ProveedorFacturacion,
-                          TipoDocumento)
+                          TipoDocumento, EstadoCompra, EstadoInventarioFisico)
+from models.compras import Compra, CompraLinea
+from models.conteo import InventarioFisico, InventarioFisicoLinea
 from models.facturacion import DocumentoTributario, IntegracionFacturacion
 from models.inventario import (CategoriaItem, Extra, ExtraPlato, Item,
                                ItemPresentacion, LoteProduccion,
@@ -28,4 +30,5 @@ __all__ = [
     "StockSucursal", "Unidad",
     "Empresa", "Sucursal", "Usuario", "UsuarioRol",
     "EstadoDocumento", "ProveedorFacturacion", "TipoDocumento", "DocumentoTributario", "IntegracionFacturacion",
+    "EstadoCompra", "EstadoInventarioFisico", "Compra", "CompraLinea", "InventarioFisico", "InventarioFisicoLinea",
 ]

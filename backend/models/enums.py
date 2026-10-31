@@ -161,3 +161,17 @@ class EstadoDocumento(str, enum.Enum):
     emitido   = "emitido"           # el facturador devolvió el folio
     rechazado = "rechazado"         # el facturador lo rechazó (datos inválidos): se corrige y se reintenta
     anulado   = "anulado"           # ya tiene su nota de crédito emitida
+
+
+# ── Recepción de mercadería e inventario físico ──────────────
+class EstadoCompra(str, enum.Enum):
+    por_recibir = "por_recibir"   # factura registrada por el admin; la mercadería aún no se cuenta
+    recibida    = "recibida"      # el cocinero contó lo que llegó y el stock ya subió
+    anulada     = "anulada"       # factura cancelada antes de recibirse
+
+
+class EstadoInventarioFisico(str, enum.Enum):
+    contando    = "contando"      # el cocinero cuenta a ciegas
+    en_revision = "en_revision"   # conteo completo; el admin revisa diferencias
+    cerrado     = "cerrado"       # diferencias aplicadas al stock
+    cancelado   = "cancelado"     # descartado sin tocar el stock
