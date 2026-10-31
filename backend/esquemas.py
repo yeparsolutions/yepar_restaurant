@@ -815,3 +815,45 @@ class CierreInventarioOut(BaseModel):
     id: int
     estado: str
     ajustes: int
+
+
+# ── Sincronización de la tablet (modo sin conexión) ──────────
+class RefPedidoIn(Entrada):
+    pedido_id: str = Field(min_length=8, max_length=36)
+
+
+class RefLineaIn(Entrada):
+    linea_id: str = Field(min_length=8, max_length=36)
+
+
+class TomarLineaSyncIn(TomarLineaIn):
+    pedido_id: str = Field(min_length=8, max_length=36)
+
+
+class AbrirPedidoSyncIn(AbrirPedidoIn):
+    pedido_id: str = Field(min_length=8, max_length=36)       # sin conexión la tablet siempre lo genera
+
+
+class OperacionIn(Entrada):
+    op_id: str = Field(min_length=8, max_length=36)            # UUID de esta operación (la clave de idempotencia)
+    tipo: Literal["abrir_pedido", "tomar_linea", "quitar_linea", "enviar", "cancelar_linea",
+                  "pedir_cuenta", "anular_pedido"]
+    datos: dict = {}
+
+
+class SincronizarIn(Entrada):
+    operaciones: list[OperacionIn] = Field(min_length=1, max_length=200)
+
+
+class ResultadoOperacionOut(BaseModel):
+    op_id: str
+    tipo: str
+    estado: str                         # aplicada | rechazada
+    repetida: bool = False              # ya se había procesado antes: se devuelve el mismo resultado
+    error: Optional[str] = None
+
+
+class SincronizarOut(BaseModel):
+    resultados: list[ResultadoOperacionOut]
+    aplicadas: int
+    rechazadas: int
