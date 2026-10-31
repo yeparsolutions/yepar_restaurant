@@ -19,7 +19,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import (Boolean, DateTime, ForeignKey, Numeric, String,
+from sqlalchemy import (Boolean, DateTime, ForeignKey, Integer, Numeric, String,
                         UniqueConstraint, func)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -82,6 +82,10 @@ class Usuario(Base):
     # Tope de descuento (%) que este usuario puede dar al cobrar. 0 = ninguno.
     # Lo que exceda el tope pide el PIN de un supervisor.
     descuento_max_pct: Mapped[Decimal]   = mapped_column(Numeric(5, 2), default=Decimal("0"), server_default="0")
+    # PIN de supervisor (solo administradores): autoriza lo que pasa del tope del cajero. Se guarda con bcrypt.
+    pin_hash:      Mapped[Optional[str]] = mapped_column(String(255))
+    pin_fallos:    Mapped[int]           = mapped_column(Integer, default=0, server_default="0")
+    pin_bloqueado_hasta: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     activo:        Mapped[bool]          = mapped_column(Boolean, default=True)
     creado_en:     Mapped[datetime]      = mapped_column(DateTime(timezone=True), server_default=func.now())
 
