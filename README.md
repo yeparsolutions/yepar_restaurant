@@ -86,7 +86,7 @@ uvicorn main:app --host 0.0.0.0 --port $PORT
 - **Modo sin conexión:** pedidos, platos y pagos aceptan un UUID generado por la tablet; sincronizar dos veces se rechaza en vez de duplicar.
 - **Sucursal:** el personal trabaja en su local; el administrador sin local fijo indica `sucursal_id`.
 
-## Mapa de la API (94 endpoints)
+## Mapa de la API (97 endpoints)
 
 **Sesión** — `POST /auth/login` · `GET /auth/yo`
 
@@ -119,6 +119,9 @@ uvicorn main:app --host 0.0.0.0 --port $PORT
 
 **Sincronización sin conexión (mesero)**
 `POST /sync/operaciones` — sube en orden lo hecho sin internet (abrir mesa, tomar, quitar, enviar, cancelar, pedir cuenta, anular)
+
+**PIN de supervisor (el administrador lo define; el cajero consulta a quién llamar)**
+`PUT|DELETE /supervisor/pin` · `GET /supervisores`
 
 **Carga masiva y arranque (administrador)**
 `GET /carga-masiva/plantilla` · `POST /carga-masiva/validar` · `POST /carga-masiva/importar` · `GET /carga-masiva/asistente`
@@ -155,6 +158,14 @@ Reglas comunes:
 - **Dos llaves en la compra:** el administrador registra la factura (`por_recibir`, el stock no se mueve); el cocinero cuenta lo que llegó sin ver lo facturado ni los costos. El stock sube con lo **contado**, al costo de la factura; el administrador ve después facturado vs. recibido.
 - **Inventario físico:** se toma una foto del stock al abrir; quien cuenta no la ve. Al cerrar se aplica la **diferencia** (contado − foto) como ajuste, así las ventas hechas durante el conteo no se pisan. El administrador puede pedir recuento de ítems puntuales antes de cerrar. Un solo inventario en curso por sucursal.
 
+## PIN de supervisor
+
+El cajero puede dar descuentos hasta su tope personal. Para pasarse, un administrador teclea su PIN en la tablet del cajero (`supervisor_id` + `pin_supervisor` en `POST /pedidos/{id}/descuento`) y el pedido queda con quién lo autorizó.
+
+- PIN de 4 a 6 dígitos, guardado con bcrypt; se define confirmando con la contraseña y se rechazan los obvios (0000, 1234).
+- **Bloqueo:** 5 fallos seguidos bloquean ese PIN 15 minutos; el contador se guarda aunque la petición falle.
+- Solo vale el PIN de un administrador activo de la misma empresa.
+
 ## Carga masiva por Excel
 
 El administrador descarga la plantilla (`insumos`, `platos`, `recetas`), la llena y la sube. **Todo o nada:** `validar` revisa sin guardar; `importar` guarda solo si no hay ningún error y, si lo hay, responde 422 con la hoja y la fila de cada problema.
@@ -186,4 +197,4 @@ La tablet genera los UUID (pedido, plato) y lleva una cola de operaciones. Al vo
 ## Pendiente
 
 Frontend de la tablet, integración con Yepar Go (delivery),
-PIN de supervisor para descuentos sobre el tope, y despliegue en Railway.
+y despliegue en Railway.

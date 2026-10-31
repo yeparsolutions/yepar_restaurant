@@ -26,6 +26,7 @@ from models import (ConfiguracionCobro, EstadoLinea, EstadoPedido, MedioPago, Mo
 from servicios.caja import _dinero, cargar_usuario, tiene_rol, turno_abierto_de
 from servicios.pedidos import cargar_pedido
 from servicios.propinas import registrar_propina_de_pedido
+from servicios.supervisor import autorizar
 
 CERO = Decimal("0")
 CENTAVO = Decimal("0.01")
@@ -125,11 +126,13 @@ def anotar_propina(db: Session, *, empresa_id: int, pedido_id: str, monto=None) 
     return pedido
 
 
-def aplicar_descuento(db: Session, *, empresa_id: int, pedido_id: str, usuario_id: int, porcentaje) -> Pedido:
+def aplicar_descuento(db: Session, *, empresa_id: int, pedido_id: str, usuario_id: int, porcentaje,
+                      supervisor_id: Optional[int] = None, pin_supervisor: Optional[str] = None) -> Pedido:
     """
     El cajero aplica un descuento en % sobre el subtotal, hasta su tope personal
-    (`descuento_max_pct`). El administrador no tiene tope. (Pedir el PIN de un
-    supervisor para pasarse del tope queda para más adelante.)
+    (`descuento_max_pct`). El administrador no tiene tope. Para pasarse del tope el
+    cajero pide a un supervisor que teclee su PIN (`supervisor_id` + `pin_supervisor`):
+    el descuento queda anotado con quién lo autorizó.
     """
     pedido = cargar_pedido(db, empresa_id, pedido_id)
     _exigir_cuenta_pedida(pedido)
@@ -141,11 +144,15 @@ def aplicar_descuento(db: Session, *, empresa_id: int, pedido_id: str, usuario_i
     if not (0 <= pct < 100):
         raise ErrorNegocio("El descuento debe ser un porcentaje entre 0 y menos de 100.")
     es_admin = tiene_rol(usuario, RolUsuario.administrador)
+    autorizador = None
     if not es_admin and pct > usuario.descuento_max_pct:
-        raise ErrorNegocio(f"El descuento excede el tope de '{usuario.nombre}' ({usuario.descuento_max_pct}%): "
-                           "pide a un administrador que lo autorice.")
+        if supervisor_id is None or not pin_supervisor:
+            raise ErrorNegocio(f"El descuento excede el tope de '{usuario.nombre}' ({usuario.descuento_max_pct}%): "
+                               "pide el PIN de un supervisor.")
+        autorizador = autorizar(db, empresa_id=empresa_id, supervisor_id=supervisor_id, pin=pin_supervisor)
     pedido.descuento = (_subtotal(pedido) * pct / 100).quantize(CENTAVO)
     pedido.descuento_por_id = usuario.id if pct > 0 else None
+    pedido.descuento_autorizado_por_id = autorizador.id if autorizador is not None else None
     db.flush()
     return pedido
 

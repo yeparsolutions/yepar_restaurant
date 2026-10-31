@@ -533,6 +533,19 @@ class PropinaIn(Entrada):
 
 class DescuentoIn(Entrada):
     porcentaje: Decimal
+    # Solo si el descuento pasa del tope del cajero: un supervisor teclea su PIN en la tablet.
+    supervisor_id: Optional[int] = None
+    pin_supervisor: Optional[str] = Field(default=None, max_length=6)
+
+
+class PinIn(Entrada):
+    pin: str = Field(min_length=4, max_length=6)
+    password: str = Field(min_length=1, max_length=200)     # confirma que eres tú
+
+
+class SupervisorOut(BaseModel):
+    id: int
+    nombre: str
 
 
 class PagoIn(Entrada):
