@@ -677,3 +677,141 @@ class DocumentoOut(BaseModel):
     total_divisa: Optional[Dinero] = None
     intentos: int
     ultimo_error: Optional[str] = None
+
+
+# ── Recepción de mercadería ──────────────────────────────────
+class LineaFacturaIn(Entrada):
+    """Una línea de la factura del proveedor (misma forma de cantidad y costo que CompraIn)."""
+    item_id: int
+    cantidad: Decimal
+    unidad: Optional[str] = None
+    presentacion_id: Optional[int] = None
+    monto_neto: Optional[Decimal] = None
+    costo_unitario_base: Optional[Decimal] = None
+
+
+class FacturaCompraIn(Entrada):
+    proveedor: str = Field(min_length=1, max_length=120)
+    numero_documento: Optional[str] = Field(default=None, max_length=60)
+    nota: Optional[str] = Field(default=None, max_length=500)
+    lineas: list[LineaFacturaIn] = Field(min_length=1)
+
+
+class LineaRecibidaIn(Entrada):
+    linea_id: int
+    cantidad: Decimal                      # lo que llegó; 0 si no llegó
+    unidad: Optional[str] = None
+    presentacion_id: Optional[int] = None
+
+
+class RecepcionIn(Entrada):
+    lineas: list[LineaRecibidaIn] = Field(min_length=1)
+
+
+class CompraLineaOut(BaseModel):
+    id: int
+    item_id: int
+    item: str
+    unidad_base: str
+    cantidad_facturada: Cantidad
+    costo_unitario_base: CostoUnitario
+    cantidad_recibida: Optional[Cantidad] = None
+    diferencia: Optional[Cantidad] = None   # recibida − facturada (negativa = faltó)
+
+
+class CompraRecepcionOut(BaseModel):
+    id: int
+    sucursal_id: int
+    proveedor: str
+    numero_documento: Optional[str] = None
+    estado: str
+    nota: Optional[str] = None
+    lineas: list[CompraLineaOut]
+
+
+class CompraResumenOut(BaseModel):
+    id: int
+    proveedor: str
+    numero_documento: Optional[str] = None
+    estado: str
+    lineas: int
+
+
+# Vista CIEGA para quien recibe: sin cantidades facturadas ni costos.
+class PresentacionCiegaOut(BaseModel):
+    id: int
+    nombre: str
+
+
+class LineaCiegaOut(BaseModel):
+    linea_id: Optional[int] = None
+    item_id: int
+    item: str
+    unidad_base: str
+    presentaciones: list[PresentacionCiegaOut]
+    contada: Optional[Cantidad] = None
+
+
+class RecepcionCiegaOut(BaseModel):
+    id: int
+    proveedor: str
+    lineas: list[LineaCiegaOut]
+
+
+# ── Inventario físico ciego ──────────────────────────────────
+class InventarioNuevoIn(Entrada):
+    categoria_id: Optional[int] = None
+    nota: Optional[str] = Field(default=None, max_length=500)
+
+
+class ConteoIn(Entrada):
+    item_id: int
+    cantidad: Decimal
+    unidad: Optional[str] = None
+    presentacion_id: Optional[int] = None
+
+
+class RecuentoIn(Entrada):
+    item_ids: list[int] = Field(min_length=1)
+
+
+class InventarioResumenOut(BaseModel):
+    id: int
+    sucursal_id: int
+    estado: str
+    categoria_id: Optional[int] = None
+    nota: Optional[str] = None
+    total_items: int
+    contados: int
+
+
+class ConteoCiegoOut(BaseModel):
+    id: int
+    estado: str
+    total_items: int
+    contados: int
+    lineas: list[LineaCiegaOut]
+
+
+class LineaRevisionOut(BaseModel):
+    item_id: int
+    item: str
+    unidad_base: str
+    cantidad_sistema: Cantidad
+    cantidad_contada: Optional[Cantidad] = None
+    diferencia: Cantidad
+    valor_diferencia: Dinero
+
+
+class RevisionOut(BaseModel):
+    id: int
+    estado: str
+    lineas: list[LineaRevisionOut]
+    con_diferencia: int
+    valor_total_diferencia: Dinero
+
+
+class CierreInventarioOut(BaseModel):
+    id: int
+    estado: str
+    ajustes: int

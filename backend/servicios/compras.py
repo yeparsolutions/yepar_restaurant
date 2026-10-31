@@ -41,6 +41,60 @@ class ResultadoCompra:
     costo_referencia: Decimal       # el mayor entre promedio y último precio
 
 
+def resolver_cantidad_y_costo(db: Session, item, *, cantidad, unidad=None, presentacion_id=None,
+                              monto_neto=None, costo_unitario_base=None) -> tuple:
+    """
+    Pasa lo que dice una factura (3 kg, 2 cajas de 12...) a unidad base y calcula el costo por unidad base.
+    Devuelve (cantidad_base, costo_unitario_base). No toca el stock: la usan tanto el ingreso directo de una
+    compra como el registro de una factura que aún no se recibe.
+    """
+    if (monto_neto is None) == (costo_unitario_base is None):
+        raise ErrorNegocio("Indica el costo con monto_neto O con costo_unitario_base (uno solo).")
+    if unidad is not None and presentacion_id is not None:
+        raise ErrorNegocio("Indica la unidad O la presentación de origen, no ambas.")
+    # 1) A unidad base.
+    if presentacion_id is not None:
+        presentacion = db.get(ItemPresentacion, presentacion_id)
+        if presentacion is None or presentacion.item_id != item.id:
+            raise ErrorNegocio("La presentación no pertenece a este ítem.")
+        cantidad_base = convertir_a_unidad_base(item, cantidad, presentacion=presentacion)
+    elif unidad is not None:
+        catalogo = db.query(Unidad).filter_by(codigo=unidad).one_or_none()
+        if catalogo is None:
+            raise ErrorNegocio(f"La unidad '{unidad}' no existe en el catálogo.")
+        cantidad_base = convertir_a_unidad_base(item, cantidad, unidad=catalogo)
+    else:
+        cantidad_base = redondear_cantidad(a_decimal(cantidad))
+        if cantidad_base <= 0:
+            raise ErrorNegocio("La cantidad comprada debe ser mayor que cero.")
+
+    # 2) Costo por unidad base de esta compra.
+    if monto_neto is not None:
+        costo_nuevo = costo_por_unidad_base(monto_neto, cantidad_base)
+    else:
+        costo_nuevo = a_decimal(costo_unitario_base)
+        if costo_nuevo < 0:
+            raise ErrorNegocio("El costo no puede ser negativo.")
+    return cantidad_base, costo_nuevo
+
+
+def convertir_cantidad(db: Session, item, *, cantidad, unidad=None, presentacion_id=None,
+                       permitir_cero: bool = False) -> Decimal:
+    """
+    Lleva una cantidad dicha en kg, cajas, etc. a la unidad base del ítem (sin costos ni stock).
+    Con `permitir_cero` acepta 0 (un conteo puede decir "no queda nada"); nunca acepta negativos.
+    """
+    cantidad = a_decimal(cantidad)
+    if cantidad < 0:
+        raise ErrorNegocio("La cantidad no puede ser negativa.")
+    if cantidad == 0:
+        if permitir_cero:
+            return Decimal("0.000")
+        raise ErrorNegocio("La cantidad debe ser mayor que cero.")
+    return resolver_cantidad_y_costo(db, item, cantidad=cantidad, unidad=unidad,
+                                     presentacion_id=presentacion_id, costo_unitario_base=0)[0]
+
+
 def ingresar_compra(
     db: Session, *,
     empresa_id: int,
@@ -71,11 +125,6 @@ def ingresar_compra(
     El costo promedio se pondera con el stock de TODAS las sucursales
     del ítem, porque el costo es un dato del ítem y no de cada local.
     """
-    if (monto_neto is None) == (costo_unitario_base is None):
-        raise ErrorNegocio("Indica el costo con monto_neto O con costo_unitario_base (uno solo).")
-    if unidad is not None and presentacion_id is not None:
-        raise ErrorNegocio("Indica la unidad O la presentación de origen, no ambas.")
-
     item = cargar_item(db, empresa_id, item_id)
     validar_sucursal(db, empresa_id, sucursal_id)
 
@@ -83,29 +132,9 @@ def ingresar_compra(
         raise ErrorNegocio(
             f"'{item.nombre}' es de tipo '{item.tipo.value}': no se compra, se produce.")
 
-    # 1) A unidad base.
-    if presentacion_id is not None:
-        presentacion = db.get(ItemPresentacion, presentacion_id)
-        if presentacion is None or presentacion.item_id != item.id:
-            raise ErrorNegocio("La presentación no pertenece a este ítem.")
-        cantidad_base = convertir_a_unidad_base(item, cantidad, presentacion=presentacion)
-    elif unidad is not None:
-        catalogo = db.query(Unidad).filter_by(codigo=unidad).one_or_none()
-        if catalogo is None:
-            raise ErrorNegocio(f"La unidad '{unidad}' no existe en el catálogo.")
-        cantidad_base = convertir_a_unidad_base(item, cantidad, unidad=catalogo)
-    else:
-        cantidad_base = redondear_cantidad(a_decimal(cantidad))
-        if cantidad_base <= 0:
-            raise ErrorNegocio("La cantidad comprada debe ser mayor que cero.")
-
-    # 2) Costo por unidad base de esta compra.
-    if monto_neto is not None:
-        costo_nuevo = costo_por_unidad_base(monto_neto, cantidad_base)
-    else:
-        costo_nuevo = a_decimal(costo_unitario_base)
-        if costo_nuevo < 0:
-            raise ErrorNegocio("El costo no puede ser negativo.")
+    cantidad_base, costo_nuevo = resolver_cantidad_y_costo(
+        db, item, cantidad=cantidad, unidad=unidad, presentacion_id=presentacion_id,
+        monto_neto=monto_neto, costo_unitario_base=costo_unitario_base)
 
     # 3) Nuevo promedio ponderado, con el stock total ANTES de que entre esta compra.
     stock_total_antes = total_fisico_item(db, item.id)

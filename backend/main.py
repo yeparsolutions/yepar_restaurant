@@ -21,7 +21,7 @@ from sqlalchemy.exc import IntegrityError
 import models  # noqa: F401  (registra todos los modelos)
 from database import Base, SessionLocal, engine
 from errores import ErrorNegocio, ErrorNoEncontrado
-from routers import auth, caja, catalogo, cocina, facturacion, inventario, salon
+from routers import auth, caja, catalogo, cocina, conteo, facturacion, inventario, recepcion, salon
 from semilla import sembrar_unidades
 
 
@@ -71,6 +71,8 @@ app.include_router(catalogo.router)
 app.include_router(inventario.router)
 app.include_router(caja.router)
 app.include_router(facturacion.router)
+app.include_router(recepcion.router)
+app.include_router(conteo.router)
 
 
 @app.get("/salud", tags=["sistema"])
