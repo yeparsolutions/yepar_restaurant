@@ -902,3 +902,56 @@ class AsistenteOut(BaseModel):
     completados: int
     total: int
     siguiente: Optional[str] = None      # título del primer paso pendiente
+
+
+# ── Sucursales y personal ────────────────────────────────────
+Rol = Literal["administrador", "cajero", "mesero", "cocinero"]
+
+
+class SucursalIn(Entrada):
+    nombre: str = Field(min_length=1, max_length=150)
+
+
+class SucursalOut(BaseModel):
+    id: int
+    nombre: str
+
+
+class PersonaIn(Entrada):
+    nombre: str = Field(min_length=1, max_length=100)
+    username: str = Field(min_length=1, max_length=50)
+    password: str = Field(min_length=1, max_length=200)
+    roles: list[Rol] = Field(min_length=1)
+    sucursal_id: Optional[int] = None
+    estacion: Optional[Literal["cocina", "barra"]] = None
+    descuento_max_pct: Decimal = Decimal("0")
+
+
+class PersonaCambiosIn(Entrada):
+    nombre: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    roles: Optional[list[Rol]] = Field(default=None, min_length=1)
+    sucursal_id: Optional[int] = None
+    estacion: Optional[Literal["cocina", "barra"]] = None
+    descuento_max_pct: Optional[Decimal] = None
+    activo: Optional[bool] = None
+
+
+class PasswordNuevaIn(Entrada):
+    password: str = Field(min_length=1, max_length=200)
+
+
+class CambiarPasswordIn(Entrada):
+    actual: str = Field(min_length=1, max_length=200)
+    nueva: str = Field(min_length=1, max_length=200)
+
+
+class PersonaOut(BaseModel):
+    id: int
+    nombre: str
+    username: str
+    roles: list[str]
+    sucursal_id: Optional[int] = None
+    estacion: Optional[str] = None
+    descuento_max_pct: Porcentaje
+    activo: bool
+    tiene_pin: bool
