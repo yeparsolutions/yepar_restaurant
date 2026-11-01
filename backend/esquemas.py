@@ -116,7 +116,7 @@ class ItemCartaOut(BaseModel):
 
 # ── Pedidos ──────────────────────────────────────────────────
 class AbrirPedidoIn(Entrada):
-    mesa_id: int
+    mesa_id: Optional[int] = None          # sin mesa: mostrador o delivery
     comensales: Optional[int] = None
     pedido_id: Optional[str] = Field(default=None, max_length=36)      # UUID generado por la tablet (sin conexión)
     sucursal_id: Optional[int] = None
@@ -955,3 +955,50 @@ class PersonaOut(BaseModel):
     descuento_max_pct: Porcentaje
     activo: bool
     tiene_pin: bool
+
+
+# ── Delivery con Yepar Go ────────────────────────────────────
+class ConexionDespachoIn(Entrada):
+    api_key: str = Field(min_length=1, max_length=200)
+    direccion_retiro: Optional[str] = Field(default=None, max_length=300)     # dónde retira el motorista (el local)
+    centro_retiro_id: Optional[str] = Field(default=None, max_length=40)
+
+
+class ConexionDespachoOut(BaseModel):
+    proveedor: str = "yepargo"
+    activo: bool
+    api_key_final: str
+    direccion_retiro: Optional[str] = None
+    centro_retiro_id: Optional[str] = None
+
+
+class CentroRetiroOut(BaseModel):
+    id: str
+    nombre: str
+    direccion: Optional[str] = None
+
+
+class DespachoIn(Entrada):
+    destinatario: str = Field(min_length=2, max_length=150)
+    direccion: str = Field(min_length=3, max_length=300)
+    telefono: Optional[str] = Field(default=None, max_length=40)
+    email: Optional[str] = Field(default=None, max_length=150)
+    ciudad: Optional[str] = Field(default=None, max_length=100)
+    region: Optional[str] = Field(default=None, max_length=100)
+    latitud: Optional[Decimal] = Field(default=None, ge=-90, le=90)
+    longitud: Optional[Decimal] = Field(default=None, ge=-180, le=180)
+    notas: Optional[str] = Field(default=None, max_length=300)
+
+
+class DespachoOut(BaseModel):
+    id: int
+    pedido_id: str
+    estado: str                                # pendiente | creado | rechazado
+    destinatario: str
+    direccion: str
+    telefono: Optional[str] = None
+    go_numero: Optional[str] = None            # número de la orden en Yepar Go (YGO-...)
+    estado_go: Optional[str] = None            # estado vivo: pending | assigned | in_route | delivered | ...
+    seguimiento_url: Optional[str] = None      # link que se le envía al cliente
+    intentos: int
+    ultimo_error: Optional[str] = None

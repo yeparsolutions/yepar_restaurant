@@ -67,7 +67,7 @@ def test_una_rechazada_no_frena_las_demas_y_queda_registrada(api):
 
 def test_datos_invalidos_se_rechazan_con_motivo(api):
     r = subir(api, "ana", [op("enviar", pedido_id="corto"), op("quitar_linea"),
-                           op("abrir_pedido", pedido_id=uid())])
+                           op("abrir_pedido", mesa_id=api.s["m1"].id)])        # sin pedido_id
     assert [x["estado"] for x in r["resultados"]] == ["rechazada"] * 3
     assert "pedido_id" in r["resultados"][0]["error"]
 

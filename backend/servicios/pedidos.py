@@ -86,28 +86,33 @@ def _cargar_personal(db: Session, empresa_id: int, usuario_id: int) -> Usuario:
 # ------------------------------------------------------------
 # Abrir el pedido de una mesa
 # ------------------------------------------------------------
-def abrir_pedido(db: Session, *, empresa_id: int, sucursal_id: int, mesa_id: int, mesero_id: int,
-                 comensales: Optional[int] = None, pedido_id: Optional[str] = None) -> Pedido:
+def abrir_pedido(db: Session, *, empresa_id: int, sucursal_id: int, mesero_id: int,
+                 mesa_id: Optional[int] = None, comensales: Optional[int] = None,
+                 pedido_id: Optional[str] = None) -> Pedido:
     """
-    El mesero se ancla a una mesa libre. `pedido_id` permite que la tablet
-    genere el UUID sin conexión y lo sincronice después.
+    El mesero se ancla a una mesa libre. Sin `mesa_id` la cuenta es de mostrador o delivery (no ocupa mesa:
+    puede haber varias abiertas a la vez). `pedido_id` permite que la tablet genere el UUID sin conexión
+    y lo sincronice después.
     """
     validar_sucursal(db, empresa_id, sucursal_id)
-    mesa = cargar_mesa(db, empresa_id, mesa_id)
-    if mesa.sucursal_id != sucursal_id or not mesa.activa:
-        raise ErrorNoEncontrado("La mesa no existe.")
+    mesa = None
+    if mesa_id is not None:
+        mesa = cargar_mesa(db, empresa_id, mesa_id)
+        if mesa.sucursal_id != sucursal_id or not mesa.activa:
+            raise ErrorNoEncontrado("La mesa no existe.")
     _cargar_personal(db, empresa_id, mesero_id)
     if comensales is not None and comensales <= 0:
         raise ErrorNegocio("Los comensales deben ser al menos uno.")
     if pedido_id is not None and db.get(Pedido, pedido_id) is not None:
         raise ErrorNegocio("Ese pedido ya existe (¿se sincronizó dos veces?).")
-    ocupada = db.query(Pedido).filter(
-        Pedido.mesa_id == mesa.id,
-        Pedido.estado.in_((EstadoPedido.abierto, EstadoPedido.cuenta_pedida))).first()
-    if ocupada is not None:
-        raise ErrorNegocio(f"La mesa '{mesa.nombre}' ya está ocupada.")
+    if mesa is not None:
+        ocupada = db.query(Pedido).filter(
+            Pedido.mesa_id == mesa.id,
+            Pedido.estado.in_((EstadoPedido.abierto, EstadoPedido.cuenta_pedida))).first()
+        if ocupada is not None:
+            raise ErrorNegocio(f"La mesa '{mesa.nombre}' ya está ocupada.")
 
-    pedido = Pedido(empresa_id=empresa_id, sucursal_id=sucursal_id, mesa_id=mesa.id, mesero_id=mesero_id,
+    pedido = Pedido(empresa_id=empresa_id, sucursal_id=sucursal_id, mesa_id=mesa.id if mesa else None, mesero_id=mesero_id,
                     comensales=comensales)
     if pedido_id is not None:
         pedido.id = pedido_id
