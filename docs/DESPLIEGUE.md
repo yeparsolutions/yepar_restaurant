@@ -15,13 +15,17 @@ Guía para poner el backend en línea. Tiempo estimado: 20 minutos. Nada de esto
 1. **Crea el proyecto** en Railway → *New Project* → *Empty Project*.
 2. **Agrega PostgreSQL:** *+ New* → *Database* → *Add PostgreSQL*.
 3. **Agrega el servicio de la API:** *+ New* → *GitHub Repo* → `yepar_restaurant`.
-4. En el servicio → *Settings* → **Root Directory** = `backend`. (Ahí están `railway.json`, `requirements.txt` y `alembic.ini`.)
-5. En el servicio → *Variables* (usa `.env.example` como lista):
+4. En el servicio → *Settings* → **Root Directory** = `backend`. (Ahí están `requirements.txt` y `alembic.ini`.)
+5. En el mismo servicio → *Settings* → *Deploy* (**este paso es obligatorio**: con la carpeta raíz en `backend`, Railway NO lee solo el `railway.json`; en la prueba real arrancó sin migrar):
+   - **Custom Start Command** = `alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port $PORT`
+   - **Healthcheck Path** = `/salud` (timeout 120 s)
+   - *(Alternativa: en *Config-as-code* apunta el archivo a `/backend/railway.json`, que ya trae estos valores.)*
+6. En el servicio → *Variables* (usa `.env.example` como lista):
    - `DATABASE_URL` = `${{Postgres.DATABASE_URL}}` (referencia a la base del paso 2).
    - `SECRET_KEY` = una clave larga y aleatoria. Genérala con `python -c "import secrets; print(secrets.token_urlsafe(64))"`. **Guárdala en tu gestor de contraseñas:** si se pierde o cambia, todos deben iniciar sesión de nuevo y se deben reconectar los facturadores.
    - `CORS_ORIGINS` = el dominio de tu web/tablet (`https://...`).
-6. **Despliega.** Al arrancar, el servicio ejecuta `alembic upgrade head` (crea las tablas y las unidades de medida) y levanta la API. Railway espera que `/salud` responda antes de dar el despliegue por bueno.
-7. *Settings* → *Networking* → **Generate Domain**. Abre `https://TU-DOMINIO/salud`: debe responder `{"estado": "ok"}`. La documentación interactiva queda en `/docs`.
+7. **Despliega.** Al arrancar, el servicio ejecuta `alembic upgrade head` (crea las tablas y las unidades de medida) y levanta la API. Railway espera que `/salud` responda antes de dar el despliegue por bueno. Si el despliegue sale "SUCCESS" pero los logs no muestran las migraciones, revisa que el paso 5 esté hecho.
+8. *Settings* → *Networking* → **Generate Domain**. Abre `https://TU-DOMINIO/salud`: debe responder `{"estado": "ok"}`. La documentación interactiva queda en `/docs`.
 
 ## Crear el primer restaurante
 
@@ -51,4 +55,4 @@ Con ese código, el usuario y la contraseña se inicia sesión (`POST /auth/logi
 - **Respaldos:** activa los respaldos de la base en Railway (*Postgres → Backups*) antes de tener clientes reales.
 - **Una sola réplica:** las migraciones corren al arrancar; con varias réplicas arrancando a la vez podrían pisarse. El `railway.json` fija `numReplicas: 1`.
 - **Cambios de esquema:** cada cambio de modelos trae su migración (`alembic revision --autogenerate`); un test avisa si falta.
-- **Primera vez en PostgreSQL:** las pruebas corren sobre SQLite; las migraciones se revisaron generando el SQL de PostgreSQL, pero no se han ejecutado contra un PostgreSQL real. Haz el primer despliegue en un proyecto de prueba y revisa los *Deploy Logs* antes de usar el definitivo.
+- **Primera vez en PostgreSQL:** las pruebas corren sobre SQLite. El despliegue de prueba (proyecto `YeparRestaurant-Test`) levantó la API sobre PostgreSQL real con el comando de arranque del paso 5; confirma las tablas con `railway connect postgres` y `SELECT version_num FROM alembic_version;` (debe dar `0006`). Haz siempre el primer despliegue de un cambio grande en un proyecto de prueba.
