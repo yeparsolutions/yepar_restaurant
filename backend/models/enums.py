@@ -175,3 +175,10 @@ class EstadoInventarioFisico(str, enum.Enum):
     en_revision = "en_revision"   # conteo completo; el admin revisa diferencias
     cerrado     = "cerrado"       # diferencias aplicadas al stock
     cancelado   = "cancelado"     # descartado sin tocar el stock
+
+
+# ── Despacho (delivery con Yepar Go) ─────────────────────────
+class EstadoDespacho(str, enum.Enum):
+    pendiente = "pendiente"   # Yepar Go no respondió: se reintentará (la orden PUDO crearse)
+    creado    = "creado"      # orden creada en Yepar Go (su estado vivo está en `estado_go`)
+    rechazado = "rechazado"   # Yepar Go la rechazó (datos inválidos, límite del plan...): hay que corregir

@@ -86,7 +86,7 @@ uvicorn main:app --host 0.0.0.0 --port $PORT
 - **Modo sin conexión:** pedidos, platos y pagos aceptan un UUID generado por la tablet; sincronizar dos veces se rechaza en vez de duplicar.
 - **Sucursal:** el personal trabaja en su local; el administrador sin local fijo indica `sucursal_id`.
 
-## Mapa de la API (105 endpoints)
+## Mapa de la API (115 endpoints)
 
 **Sesión** — `POST /auth/login` · `GET /auth/yo`
 
@@ -119,6 +119,10 @@ uvicorn main:app --host 0.0.0.0 --port $PORT
 
 **Sincronización sin conexión (mesero)**
 `POST /sync/operaciones` — sube en orden lo hecho sin internet (abrir mesa, tomar, quitar, enviar, cancelar, pedir cuenta, anular)
+
+**Delivery con Yepar Go (el administrador conecta; caja y meseros piden el reparto)**
+`PUT|GET|DELETE /despacho/conexion` · `GET /despacho/centros-retiro` · `POST|GET /pedidos/{id}/despacho` ·
+`GET /despachos` · `POST /despachos/actualizar` · `POST /despachos/{id}/actualizar` · `POST /despachos/reintentar`
 
 **Equipo (administrador)**
 `GET|POST /sucursales` · `PATCH /sucursales/{id}` · `GET|POST /personal` · `PATCH /personal/{id}` ·
@@ -161,6 +165,15 @@ Reglas comunes:
 
 - **Dos llaves en la compra:** el administrador registra la factura (`por_recibir`, el stock no se mueve); el cocinero cuenta lo que llegó sin ver lo facturado ni los costos. El stock sube con lo **contado**, al costo de la factura; el administrador ve después facturado vs. recibido.
 - **Inventario físico:** se toma una foto del stock al abrir; quien cuenta no la ve. Al cerrar se aplica la **diferencia** (contado − foto) como ajuste, así las ventas hechas durante el conteo no se pisan. El administrador puede pedir recuento de ítems puntuales antes de cerrar. Un solo inventario en curso por sucursal.
+
+## Delivery con Yepar Go
+
+El restaurante conecta **su** cuenta de Yepar Go con su API Key (se valida al instante y se guarda cifrada) y, opcionalmente, su dirección o centro de retiro. Luego, desde cualquier cuenta, caja o el mesero de esa cuenta piden el reparto con nombre, teléfono y dirección: Yepar Go crea la orden, la geocodifica y devuelve el **link de seguimiento** para el cliente.
+
+- **Cuentas sin mesa:** `POST /pedidos` sin `mesa_id` abre una cuenta de mostrador/delivery (puede haber varias a la vez).
+- **Reintentos:** si Yepar Go no responde, el despacho queda `pendiente` (202) y `POST /despachos/reintentar` lo vuelve a pedir; si lo rechaza (datos, límite del plan) queda `rechazado` (422) con el motivo y se corrige sobre el mismo despacho.
+- **Aviso:** Yepar Go aún no tiene clave de idempotencia; si una llamada se corta justo al confirmar, un reintento podría duplicar la orden. Cada orden lleva `YRS-D<n>` en sus notas para encontrarla.
+- **Seguimiento:** `POST /despachos/actualizar` consulta el estado vivo (pending, assigned, in_route, delivered...) solo de lo que sigue en la calle.
 
 ## Equipo y alta de restaurantes
 
@@ -206,7 +219,6 @@ La tablet genera los UUID (pedido, plato) y lleva una cola de operaciones. Al vo
 
 ## Pendiente
 
-Frontend de la tablet, integración con Yepar Go (delivery),
-y probar las migraciones contra un PostgreSQL real.
+Frontend de la tablet y probar las migraciones contra un PostgreSQL real.
 
 **Despliegue:** ver [`docs/DESPLIEGUE.md`](docs/DESPLIEGUE.md).
