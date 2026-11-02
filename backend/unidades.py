@@ -13,12 +13,14 @@
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Optional
 
+from errores import ErrorNegocio
+
 # Precisión con la que se guardan las cantidades y los costos.
 _MILESIMA = Decimal("0.001")
 _MILLONESIMA = Decimal("0.000001")
 
 
-class ErrorUnidades(ValueError):
+class ErrorUnidades(ErrorNegocio):
     """Se intentó una conversión o un dato de unidades que no es válido."""
 
 
