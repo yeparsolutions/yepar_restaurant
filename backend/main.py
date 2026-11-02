@@ -21,7 +21,7 @@ from sqlalchemy.exc import IntegrityError
 import models  # noqa: F401  (registra todos los modelos)
 from database import Base, SessionLocal, engine
 from errores import ErrorNegocio, ErrorNoEncontrado
-from routers import auth, caja, carga_masiva, catalogo, cocina, conteo, despacho, equipo, facturacion, inventario, recepcion, salon, supervisor, sync
+from routers import auth, caja, carga_masiva, catalogo, cocina, conteo, despacho, equipo, facturacion, inventario, recepcion, registro, salon, supervisor, sync
 from semilla import sembrar_unidades
 
 
@@ -65,6 +65,7 @@ async def _conflicto(_: Request, error: IntegrityError):
 
 
 app.include_router(auth.router)
+app.include_router(registro.router)
 app.include_router(salon.router)
 app.include_router(cocina.router)
 app.include_router(catalogo.router)
