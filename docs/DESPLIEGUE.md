@@ -27,7 +27,17 @@ Guía para poner el backend en línea. Tiempo estimado: 20 minutos. Nada de esto
 7. **Despliega.** Al arrancar, el servicio ejecuta `alembic upgrade head` (crea las tablas y las unidades de medida) y levanta la API. Railway espera que `/salud` responda antes de dar el despliegue por bueno. Si el despliegue sale "SUCCESS" pero los logs no muestran las migraciones, revisa que el paso 5 esté hecho.
 8. *Settings* → *Networking* → **Generate Domain**. Abre `https://TU-DOMINIO/salud`: debe responder `{"estado": "ok"}`. La documentación interactiva queda en `/docs`.
 
-## Crear el primer restaurante
+## Desplegar la web
+
+La web (`frontend/`) es un segundo servicio en el mismo proyecto de Railway:
+
+1. **New → GitHub Repo** → el mismo repositorio. En Settings → **Root Directory** = `/frontend`.
+2. Variables del servicio web: `VITE_API_URL` = la dirección pública de la API (con `https://`, sin `/` al final). Debe estar **antes** del primer despliegue, porque se incorpora al compilar.
+3. Settings → Networking → **Generate Domain**.
+4. En el servicio **api**, variable `CORS_ORIGINS` = la dirección de la web (con `https://`, sin `/` al final). Sin esto el navegador bloquea las llamadas.
+5. Abre la web y pulsa **Crear mi restaurante**: ya no hace falta el script de abajo. Para cerrar el registro público (si solo Yepar da de alta clientes): `REGISTRO_ABIERTO=0` en el servicio api.
+
+## Crear el primer restaurante (alternativa por terminal)
 
 La base nace vacía: hay que dar de alta al primer cliente con su administrador. Desde tu computador, en la carpeta `backend`:
 
