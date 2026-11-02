@@ -5,9 +5,10 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { descargar, ErrorApi, pedir, type Sesion } from "./api";
 import { Marca } from "./App";
+import Configuracion from "./Configuracion";
 
-type Pestana = "inicio" | "carga" | "equipo";
-const PESTANAS: [Pestana, string][] = [["inicio", "Inicio"], ["carga", "Carga por Excel"], ["equipo", "Equipo"]];
+type Pestana = "inicio" | "carga" | "equipo" | "config";
+const PESTANAS: [Pestana, string][] = [["inicio", "Inicio"], ["carga", "Carga por Excel"], ["equipo", "Equipo"], ["config", "Configuración"]];
 
 export default function Panel({ sesion, alSalir }: { sesion: Sesion; alSalir: () => void }) {
   const [pestana, setPestana] = useState<Pestana>("inicio");
@@ -32,6 +33,7 @@ export default function Panel({ sesion, alSalir }: { sesion: Sesion; alSalir: ()
         {pestana === "inicio" && <Inicio ir={setPestana} />}
         {pestana === "carga" && <Carga />}
         {pestana === "equipo" && <Equipo />}
+        {pestana === "config" && <Configuracion sesion={sesion} />}
       </main>
     </div>
   );
@@ -48,7 +50,7 @@ function Inicio({ ir }: { ir: (p: Pestana) => void }) {
     pedir<Asistente>("/carga-masiva/asistente").then(setA).catch((e) => setError(e.message));
   }, []);
   // A qué sección de esta web lleva cada paso (los que aún no tienen pantalla se hacen con la tablet o más adelante).
-  const destino: Record<string, Pestana | undefined> = { insumos: "carga", platos: "carga", recetas: "carga", stock: "carga", personal: "equipo", sucursal: "equipo" };
+  const destino: Record<string, Pestana | undefined> = { insumos: "carga", platos: "carga", recetas: "carga", stock: "carga", personal: "equipo", sucursal: "equipo", mesas: "config", caja: "config", cobro: "config", facturacion: "config" };
 
   if (error) return <p className="error">{error}</p>;
   if (!a) return <p className="suave">Cargando…</p>;

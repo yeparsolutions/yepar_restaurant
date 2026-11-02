@@ -68,7 +68,8 @@ uvicorn main:app --host 0.0.0.0 --port $PORT
 ## Web (carpeta `frontend/`)
 
 Aplicación web en React + TypeScript (Vite). Hoy trae el registro público, el inicio de sesión y el **panel del administrador**:
-asistente de arranque, carga por Excel (descargar planilla → revisar → importar) y equipo (locales y personal).
+asistente de arranque, carga por Excel (descargar planilla → revisar → importar), equipo (locales y personal) y
+configuración (plano de mesas que se arrastra, cajas y terminales, propina y conexión del facturador).
 Se ve bien en teléfono y tablet, en modo claro y oscuro.
 
 ```bash
