@@ -65,6 +65,22 @@ uvicorn main:app --host 0.0.0.0 --port $PORT
   Además revisa que el SQL para PostgreSQL sea portable. `alembic upgrade head --sql` imprime el SQL sin conectarse.
 - Las unidades de medida (g, kg, ml, l, cc, und, mg) las siembra la migración `0002`; sin ellas nada convierte.
 
+## Web (carpeta `frontend/`)
+
+Aplicación web en React + TypeScript (Vite). Hoy trae el registro público, el inicio de sesión y el **panel del administrador**:
+asistente de arranque, carga por Excel (descargar planilla → revisar → importar) y equipo (locales y personal).
+Se ve bien en teléfono y tablet, en modo claro y oscuro.
+
+```bash
+cd frontend
+cp .env.example .env     # VITE_API_URL = dirección de la API
+npm install
+npm run dev              # http://localhost:5173
+npm run build            # compila a frontend/dist
+```
+
+`VITE_API_URL` se "hornea" al compilar: si cambia, hay que volver a desplegar la web.
+
 ## Variables de entorno
 
 | Variable | Para qué |
@@ -72,7 +88,9 @@ uvicorn main:app --host 0.0.0.0 --port $PORT
 | `DATABASE_URL` | PostgreSQL en producción (Railway entrega `postgres://`, se corrige solo) |
 | `SECRET_KEY` | Firma de sesiones **y** cifrado de las API Key de los facturadores. Obligatoria con una base real. **Si se cambia, hay que volver a conectar el facturador de cada restaurante.** |
 | `ACCESS_TOKEN_MINUTES` | Duración de la sesión (por defecto un turno de trabajo, 12 h) |
-| `CORS_ORIGINS` | Orígenes permitidos del frontend |
+| `CORS_ORIGINS` | Orígenes permitidos del frontend (la dirección de la web, sin `/` al final) |
+| `REGISTRO_ABIERTO` | `1` (por defecto) deja que cualquiera cree su restaurante desde la web; `0` lo cierra |
+| `REGISTRO_MAX_POR_HORA` | Tope de restaurantes que se pueden crear por hora desde una misma conexión (por defecto 5) |
 | `YEPARDTE_API_URL` | URL de YeparDTE (por defecto `https://api.yepardte.cl`) |
 | `YEPARFACTURA_API_URL` | URL de YeparFactura (por defecto `https://yeparfactura.yeparsolution.com`) |
 | `YEPARFACTURA_ALICUOTA` | IVA general de Venezuela que se usa al facturar (por defecto `16`) |
@@ -86,9 +104,9 @@ uvicorn main:app --host 0.0.0.0 --port $PORT
 - **Modo sin conexión:** pedidos, platos y pagos aceptan un UUID generado por la tablet; sincronizar dos veces se rechaza en vez de duplicar.
 - **Sucursal:** el personal trabaja en su local; el administrador sin local fijo indica `sucursal_id`.
 
-## Mapa de la API (115 endpoints)
+## Mapa de la API (117 endpoints)
 
-**Sesión** — `POST /auth/login` · `GET /auth/yo`
+**Sesión y registro** — `POST /auth/login` · `GET /auth/yo` · `POST /registro` (público, crea el restaurante y deja la sesión iniciada) · `GET /registro/estado`
 
 **Salón (mesero; el cajero ve plano y pedidos; el administrador crea mesas)**
 `GET /mesas` · `POST /mesas` · `PATCH /mesas/{id}/posicion` · `GET /mesas/qr/{token}` · `GET /carta` ·
@@ -177,6 +195,7 @@ El restaurante conecta **su** cuenta de Yepar Go con su API Key (se valida al in
 
 ## Equipo y alta de restaurantes
 
+- Desde la web: **Crear mi restaurante** (`POST /registro`) hace lo mismo y deja la sesión iniciada.
 - `python crear_restaurante.py ...` da de alta un restaurante nuevo (sucursal + administrador) y entrega el **código de acceso** de 8 letras con que el equipo inicia sesión.
 - El administrador crea sucursales y personal. El personal que no es administrador trabaja en una sucursal; el cocinero lleva estación (cocina o barra).
 - El restaurante nunca se queda sin un administrador activo; una persona dada de baja no puede iniciar sesión pero conserva su historial.
@@ -219,6 +238,6 @@ La tablet genera los UUID (pedido, plato) y lleva una cola de operaciones. Al vo
 
 ## Pendiente
 
-Frontend de la tablet y probar las migraciones contra un PostgreSQL real.
+App de la tablet (mesero, cocina y caja) y probar las migraciones contra un PostgreSQL real.
 
 **Despliegue:** ver [`docs/DESPLIEGUE.md`](docs/DESPLIEGUE.md).
