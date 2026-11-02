@@ -32,6 +32,13 @@ class EstadoMesa:
     pedido_id: Optional[str] = None
     mesero_id: Optional[int] = None
     lineas_listas: int = 0            # cuántos platos esperan ser retirados
+    # Para dibujar el plano (el administrador las acomoda; la tablet las muestra donde corresponde).
+    capacidad: int = 4
+    pos_x: int = 0
+    pos_y: int = 0
+    ancho: int = 80
+    alto: int = 80
+    forma: str = "cuadrada"
 
 
 def crear_mesa(db: Session, *, empresa_id: int, sucursal_id: int, nombre: str, capacidad: int = 4,
@@ -96,8 +103,10 @@ def estado_mesas(db: Session, *, empresa_id: int, sucursal_id: int) -> list:
     resultado = []
     for mesa in mesas:
         pedido = abiertos.get(mesa.id)
+        plano = dict(capacidad=mesa.capacidad, pos_x=mesa.pos_x, pos_y=mesa.pos_y, ancho=mesa.ancho,
+                     alto=mesa.alto, forma=mesa.forma)
         if pedido is None:
-            resultado.append(EstadoMesa(mesa.id, mesa.nombre, LIBRE))
+            resultado.append(EstadoMesa(mesa.id, mesa.nombre, LIBRE, **plano))
             continue
         listas = sum(1 for l in pedido.lineas if l.estado == EstadoLinea.lista)
         if listas:
@@ -106,5 +115,5 @@ def estado_mesas(db: Session, *, empresa_id: int, sucursal_id: int) -> list:
             estado = CUENTA_PEDIDA
         else:
             estado = OCUPADA
-        resultado.append(EstadoMesa(mesa.id, mesa.nombre, estado, pedido.id, pedido.mesero_id, listas))
+        resultado.append(EstadoMesa(mesa.id, mesa.nombre, estado, pedido.id, pedido.mesero_id, listas, **plano))
     return resultado

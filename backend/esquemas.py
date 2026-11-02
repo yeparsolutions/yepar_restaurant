@@ -87,6 +87,12 @@ class EstadoMesaOut(BaseModel):
     pedido_id: Optional[str] = None
     mesero_id: Optional[int] = None
     lineas_listas: int = 0
+    capacidad: int = 4
+    pos_x: int = 0
+    pos_y: int = 0
+    ancho: int = 80
+    alto: int = 80
+    forma: str = "cuadrada"
 
 
 # ── Carta y disponibilidad ───────────────────────────────────

@@ -127,6 +127,9 @@ def test_el_admin_arma_el_plano_y_el_mesero_se_ancla_por_qr(api):
     assert (mesa["nombre"], mesa["forma"], mesa["sucursal_id"]) == ("Terraza 1", "redonda", api.s["sucursal"].id)
     movida = api.como("admin", "patch", f"/mesas/{mesa['id']}/posicion", json={"pos_x": 300, "pos_y": 400})
     assert (movida.json()["pos_x"], movida.json()["pos_y"]) == (300, 400)
+    # El plano que ve el salón trae dónde está y cómo es cada mesa (para dibujarlo).
+    en_plano = {m["nombre"]: m for m in api.get("admin", "/mesas").json()}["Terraza 1"]
+    assert (en_plano["pos_x"], en_plano["pos_y"], en_plano["forma"], en_plano["capacidad"]) == (300, 400, "redonda", 6)
     escaneada = api.get("ana", f"/mesas/qr/{mesa['qr_token']}")
     assert escaneada.status_code == 200 and escaneada.json()["id"] == mesa["id"]
     assert api.get("ana", "/mesas/qr/inventado").status_code == 404
