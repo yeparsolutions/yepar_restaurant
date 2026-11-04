@@ -6,12 +6,20 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { descargar, ErrorApi, pedir, type Sesion } from "./api";
 import { Marca } from "./App";
 import Configuracion from "./Configuracion";
+import ResumenDia from "./Resumen";
 
-type Pestana = "inicio" | "carga" | "equipo" | "config";
-const PESTANAS: [Pestana, string][] = [["inicio", "Inicio"], ["carga", "Carga por Excel"], ["equipo", "Equipo"], ["config", "Configuración"]];
+type Pestana = "resumen" | "inicio" | "carga" | "equipo" | "config";
+const PESTANAS: [Pestana, string][] = [["resumen", "Resumen"], ["inicio", "Arranque"], ["carga", "Carga por Excel"], ["equipo", "Equipo"], ["config", "Configuración"]];
 
 export default function Panel({ sesion, alSalir }: { sesion: Sesion; alSalir: () => void }) {
-  const [pestana, setPestana] = useState<Pestana>("inicio");
+  // Al entrar: con el arranque completo vas directo al resumen del día; si falta algo, al asistente.
+  const [pestana, setPestana] = useState<Pestana | null>(null);
+  useEffect(() => {
+    pedir<Asistente>("/carga-masiva/asistente")
+      .then((a) => setPestana(a.completados === a.total ? "resumen" : "inicio"))
+      .catch(() => setPestana("inicio"));
+  }, []);
+  if (pestana === null) return <main className="centro"><p className="suave">Cargando…</p></main>;
   return (
     <div className="panel">
       <header className="barra">
@@ -30,6 +38,7 @@ export default function Panel({ sesion, alSalir }: { sesion: Sesion; alSalir: ()
         </div>
       </header>
       <main className="contenido">
+        {pestana === "resumen" && <ResumenDia sesion={sesion} />}
         {pestana === "inicio" && <Inicio ir={setPestana} />}
         {pestana === "carga" && <Carga />}
         {pestana === "equipo" && <Equipo />}
@@ -61,6 +70,7 @@ function Inicio({ ir }: { ir: (p: Pestana) => void }) {
       <p className="suave">
         {a.siguiente ? <>Siguiente paso: <strong>{a.siguiente}</strong></> : "¡Todo listo! Tu restaurante está configurado."}
       </p>
+      {!a.siguiente && <button onClick={() => ir("resumen")}>Ir al resumen del día</button>}
       <div className="progreso" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
         <div style={{ width: `${pct}%` }} />
       </div>

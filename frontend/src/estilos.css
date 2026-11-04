@@ -77,7 +77,7 @@ form > button { margin-top: 4px; width: 100%; }
 .barra { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; padding: 10px 16px; background: var(--tarjeta); border-bottom: 1px solid var(--borde); position: sticky; top: 0; z-index: 1; }
 .barra nav { display: flex; gap: 4px; flex: 1; overflow-x: auto; }
 .pestana { background: transparent; color: var(--suave); white-space: nowrap; }
-@media (max-width: 720px) { .barra nav { order: 3; flex-basis: 100%; } }
+@media (max-width: 1100px) { .barra nav { order: 3; flex-basis: 100%; } }
 .pestana:hover:not(:disabled) { background: var(--violeta-suave); }
 .pestana.activa { background: var(--violeta-suave); color: var(--violeta-fuerte); }
 .usuario { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -130,3 +130,31 @@ legend { font-weight: 600; font-size: 0.875rem; padding: 0; margin-bottom: 4px; 
 .opcion input { width: 20px; min-height: 20px; margin-top: 3px; flex: none; }
 .opcion span { display: grid; }
 .opcion small { color: var(--suave); }
+
+/* Resumen del día */
+.encabezado { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin: 12px 0 16px; }
+.kpi { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: var(--radio); padding: 14px 16px; display: grid; gap: 2px; }
+.kpi span { color: var(--suave); font-size: 0.85rem; font-weight: 600; }
+.kpi strong { font-size: 1.7rem; line-height: 1.2; color: var(--violeta-fuerte); }
+.kpi small { color: var(--suave); }
+.tablero { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 12px; margin-bottom: 12px; }
+.panelito { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: var(--radio); padding: 4px 16px 14px; }
+.panelito h2 { margin: 12px 0 10px; font-size: 1rem; }
+.panelito.ancho { margin-top: 4px; }
+.panelito table { border: 0; border-radius: 0; }
+.estados { list-style: none; margin: 0 0 8px; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.estados li { border-radius: 10px; padding: 10px 12px; background: var(--fondo); border-left: 5px solid var(--borde); }
+.estados b { font-size: 1.4rem; margin-right: 4px; }
+.e-libre { border-left-color: #16a34a !important; }
+.e-ocupada { border-left-color: var(--violeta) !important; }
+.e-lista { border-left-color: #f59e0b !important; }
+.e-cuenta { border-left-color: #0ea5e9 !important; }
+.par { display: flex; justify-content: space-between; gap: 12px; }
+.alerta { color: var(--mal); white-space: nowrap; }
+.margen { display: flex; align-items: center; gap: 8px; min-width: 160px; }
+.margen b { white-space: nowrap; min-width: 56px; }
+.barra-margen { display: block; height: 8px; border-radius: 4px; max-width: 90px; }
+.barra-margen.alto { background: #16a34a; }
+.barra-margen.medio { background: #f59e0b; }
+.barra-margen.bajo { background: #dc2626; }
