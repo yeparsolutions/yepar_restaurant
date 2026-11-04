@@ -129,6 +129,7 @@ def test_alertas_y_lista_de_compras(db, u, api):
 
     alertas = api.get("chef", "/inventario/alertas").json()
     assert [(a["nombre"], a["disponible"]) for a in alertas] == [("Cola", "10.000")]
+    assert alertas[0]["unidad"] == "und"                      # para que el panel muestre «10 und», no un número suelto
     lista = api.get("admin", "/inventario/lista-compras").json()
     assert len(lista["lineas"]) == 1
     linea = lista["lineas"][0]

@@ -53,6 +53,7 @@ class AlertaStock:
     disponible: Decimal
     stock_minimo: Decimal
     se_produce: bool               # componente: se repone produciendo, no comprando
+    unidad: str = ""               # unidad base en que se mide (g, ml, und), para mostrar "5.000 g" y no "5.000"
 
 
 @dataclass
@@ -149,7 +150,8 @@ def alertas_stock_bajo(db: Session, *, empresa_id: int, sucursal_id: int) -> lis
                     .all())
     alertas = [
         AlertaStock(item_id=i.id, nombre=i.nombre, tipo=i.tipo, disponible=disponibles.get(i.id, CERO),
-                    stock_minimo=i.stock_minimo, se_produce=i.tipo == TipoItem.componente)
+                    stock_minimo=i.stock_minimo, se_produce=i.tipo == TipoItem.componente,
+                    unidad=i.unidad_base.codigo)
         for i in ingredientes if disponibles.get(i.id, CERO) < i.stock_minimo
     ]
     return sorted(alertas, key=lambda a: a.disponible - a.stock_minimo)

@@ -91,7 +91,7 @@ def movimientos(sucursal_id: Optional[int] = None, item_id: Optional[int] = None
 def alertas(sucursal_id: Optional[int] = None, db: Session = Depends(get_db), usuario: Usuario = Depends(admin_o_cocina)):
     """Ingredientes bajo su stock mínimo, los más críticos primero."""
     return [AlertaOut(item_id=a.item_id, nombre=a.nombre, tipo=a.tipo.value, disponible=a.disponible,
-                      stock_minimo=a.stock_minimo, se_produce=a.se_produce)
+                      stock_minimo=a.stock_minimo, se_produce=a.se_produce, unidad=a.unidad)
             for a in svc_disp.alertas_stock_bajo(db, empresa_id=usuario.empresa_id,
                                                  sucursal_id=resolver_sucursal(usuario, sucursal_id))]
 

@@ -454,6 +454,7 @@ class AlertaOut(BaseModel):
     disponible: Cantidad
     stock_minimo: Cantidad
     se_produce: bool
+    unidad: str = ""
 
 
 class LineaCompraOut(BaseModel):
