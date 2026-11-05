@@ -14,10 +14,10 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from database import get_db
-from esquemas import (AbrirPedidoIn, EnvioOut, EstadoMesaOut, FaltanteOut, ItemCartaOut, LineaOut,
+from esquemas import (AbrirPedidoIn, EnvioOut, EstadoMesaOut, FaltanteOut, ItemCartaOut, LineaOut, OpcionCartaOut,
                       MesaIn, MesaOut, PedidoOut, PosicionIn, RetiroOut, TomarLineaIn, TomarLineaOut,
                       TraspasoIn)
-from models import Item, RolUsuario, Usuario
+from models import Extra, ExtraPlato, Item, RecetaLinea, RolUsuario, Usuario
 from routers.comun import (disponibilidad_out, exigir_ser_el_mesero, linea_out, pedido_out)
 from seguridad import exigir_roles, resolver_sucursal
 from servicios import cocina as svc_cocina
@@ -72,11 +72,23 @@ def carta(sucursal_id: Optional[int] = Query(default=None), db: Session = Depend
           usuario: Usuario = Depends(solo_mesero)):
     """Lo que ve el mesero: solo vendibles, cada uno con su semáforo (alcanza / qué falta)."""
     resultado = []
+    extras = db.query(Extra).filter(Extra.empresa_id == usuario.empresa_id, Extra.activo.is_(True)).all()
+    por_plato: dict[int, set[int]] = {}
+    for ep in db.query(ExtraPlato).filter(ExtraPlato.extra_id.in_([e.id for e in extras] or [0])).all():
+        por_plato.setdefault(ep.extra_id, set()).add(ep.item_id)
     for d in catalogo_mesero(db, empresa_id=usuario.empresa_id,
                              sucursal_id=resolver_sucursal(usuario, sucursal_id)):
         item = db.get(Item, d.item_id)
         base = disponibilidad_out(d)
+        removibles = []
+        if item.receta is not None:
+            removibles = [OpcionCartaOut(id=l.ingrediente_id, nombre=l.ingrediente.nombre)
+                          for l in item.receta.lineas if l.es_removible]
+        ofrecidos = [OpcionCartaOut(id=e.id, nombre=e.nombre, precio=e.precio) for e in extras
+                     if e.aplica_a_todos or item.id in por_plato.get(e.id, set())]
         resultado.append(ItemCartaOut(
+            categoria=item.categoria.nombre if item.categoria else None,
+            removibles=removibles, extras=ofrecidos,
             item_id=item.id, nombre=item.nombre, precio_venta=item.precio_venta, foto_url=item.foto_url,
             estacion=item.estacion.value if item.estacion else "cocina", alcanza=base.alcanza, faltas=base.faltas))
     return resultado

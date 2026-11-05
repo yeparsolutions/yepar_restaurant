@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { alExpirarSesion, guardarSesion, guardarVinculo, leerSesion, leerVinculo, pedir, type Sesion } from "./api";
 import Acceso from "./Acceso";
 import Panel from "./Panel";
+import Mesero from "./Mesero";
 
 export default function App() {
   const [sesion, setSesion] = useState<Sesion | null>(leerSesion);
@@ -42,6 +43,9 @@ export default function App() {
     return <Acceso alIniciar={iniciar} vinculo={vinculo} aviso={aviso} alDesvincular={() => { guardarVinculo(null); setVinculo(null); }} />;
   }
 
+  if (sesion.usuario.roles.includes("mesero") && !sesion.usuario.roles.includes("administrador")) {
+    return <Mesero sesion={sesion} alSalir={salir} />;
+  }
   if (!sesion.usuario.roles.includes("administrador")) {
     return (
       <main className="centro">

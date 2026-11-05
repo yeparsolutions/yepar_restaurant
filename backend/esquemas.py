@@ -148,9 +148,19 @@ class DisponibilidadOut(BaseModel):
     faltas: list[FaltaOut]
 
 
+class OpcionCartaOut(BaseModel):
+    """Algo que el mesero puede quitar (id del ingrediente) o agregar (id del extra)."""
+    id: int
+    nombre: str
+    precio: Optional[Dinero] = None
+
+
 class ItemCartaOut(BaseModel):
     item_id: int
     nombre: str
+    categoria: Optional[str] = None
+    removibles: list[OpcionCartaOut] = []
+    extras: list[OpcionCartaOut] = []
     precio_venta: Optional[Dinero] = None
     foto_url: Optional[str] = None
     estacion: str
