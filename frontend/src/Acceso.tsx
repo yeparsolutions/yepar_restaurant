@@ -65,7 +65,10 @@ function Admin({ alIniciar, aviso, alEquipo }: { alIniciar: (s: Sesion) => void;
 
 function Entrar({ alIniciar }: { alIniciar: (s: Sesion) => void }) {
   const [correo, setCorreo] = useState("");
+  const [codigo, setCodigo] = useState("");
+  const [usuario, setUsuario] = useState("");
   const [clave, setClave] = useState("");
+  const [anterior, setAnterior] = useState(false); // cuentas creadas antes de que existiera el correo
   const [error, setError] = useState("");
   const [cargando, setCargando] = useState(false);
 
@@ -74,7 +77,8 @@ function Entrar({ alIniciar }: { alIniciar: (s: Sesion) => void }) {
     setError("");
     setCargando(true);
     try {
-      alIniciar(await pedir<Sesion>("/auth/login", { json: { email: correo, password: clave }, token: "" }));
+      const json = anterior ? { codigo_empresa: codigo, username: usuario, password: clave } : { email: correo, password: clave };
+      alIniciar(await pedir<Sesion>("/auth/login", { json, token: "" }));
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -84,10 +88,23 @@ function Entrar({ alIniciar }: { alIniciar: (s: Sesion) => void }) {
   return (
     <form onSubmit={enviar}>
       <h1>Iniciar sesión</h1>
-      <Campo etiqueta="Correo" valor={correo} cambiar={setCorreo} tipo="email" auto="email" />
+      {anterior ? (
+        <>
+          <p className="suave">Para cuentas creadas antes de usar correo. Al entrar, el panel te pedirá registrar tu correo.</p>
+          <Campo etiqueta="Código del restaurante" valor={codigo} cambiar={(v) => setCodigo(v.toUpperCase())} ayuda="Son 8 letras y números." />
+          <Campo etiqueta="Usuario" valor={usuario} cambiar={setUsuario} auto="username" />
+        </>
+      ) : (
+        <Campo etiqueta="Correo" valor={correo} cambiar={setCorreo} tipo="email" auto="email" />
+      )}
       <Campo etiqueta="Contraseña" valor={clave} cambiar={setClave} tipo="password" auto="current-password" />
       {error && <p className="error" role="alert">{error}</p>}
       <button disabled={cargando}>{cargando ? "Entrando…" : "Entrar"}</button>
+      <p className="cambio">
+        <button type="button" className="enlace" onClick={() => { setAnterior(!anterior); setError(""); }}>
+          {anterior ? "Entrar con mi correo" : "Mi cuenta es anterior (con código)"}
+        </button>
+      </p>
     </form>
   );
 }

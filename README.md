@@ -198,7 +198,7 @@ El restaurante conecta **su** cuenta de Yepar Go con su API Key (se valida al in
 ## Equipo y alta de restaurantes
 
 - Desde la web: **Crear mi restaurante** (`POST /registro`) hace lo mismo y deja la sesión iniciada. El administrador entra con su **correo** (único en todo el sistema), sin código.
-- **Tablets:** el administrador genera un enlace de vinculación (Equipo → Tablets) y lo abre una vez en cada tablet; después el personal toca su nombre y escribe su contraseña. «Desvincular todas» invalida los enlaces y tablets anteriores (sube `vinculo_version` de la empresa). El código de 8 letras sigue existiendo por dentro, pero ya nadie lo escribe.
+- **Tablets:** el administrador genera un enlace de vinculación (Equipo → Tablets) y lo abre una vez en cada tablet; después el personal toca su nombre y escribe su contraseña. «Desvincular todas» invalida los enlaces y tablets anteriores (sube `vinculo_version` de la empresa). El código de 8 letras sigue existiendo por dentro, pero ya nadie lo escribe. Las cuentas anteriores (sin correo) entran por «Mi cuenta es anterior (con código)» y el panel les pide registrar su correo.
 - `python crear_restaurante.py ...` da de alta un restaurante nuevo (sucursal + administrador) y entrega el **código de acceso** de 8 letras con que el equipo inicia sesión.
 - El administrador crea sucursales y personal. El personal que no es administrador trabaja en una sucursal; el cocinero lleva estación (cocina o barra).
 - El restaurante nunca se queda sin un administrador activo; una persona dada de baja no puede iniciar sesión pero conserva su historial.
