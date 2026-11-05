@@ -30,7 +30,7 @@ def test_login_correcto_devuelve_token_y_datos_de_la_persona(db, cliente, local,
     cuerpo = r.json()
     assert cuerpo["token_type"] == "bearer" and cuerpo["access_token"]
     assert cuerpo["usuario"] == {"id": cuerpo["usuario"]["id"], "nombre": "Ana", "roles": ["mesero"],
-                                 "estacion": None, "sucursal_id": sucursal.id}
+                                 "estacion": None, "sucursal_id": sucursal.id, "email": None}
 
 
 def test_el_codigo_de_empresa_no_distingue_mayusculas(db, cliente, local, nuevo_usuario):

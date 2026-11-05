@@ -27,7 +27,8 @@ def ejecutar(db, args, password: str) -> str:
     sembrar_unidades(db)                     # sin las unidades (g, kg, ml...) nada funciona
     empresa, sucursal, admin = crear_restaurante(
         db, nombre=args.nombre, sucursal=args.sucursal, admin_nombre=args.admin_nombre,
-        admin_usuario=args.admin_usuario, admin_password=password, pais=args.pais, moneda=args.moneda)
+        admin_usuario=args.admin_usuario, admin_password=password, pais=args.pais, moneda=args.moneda,
+        admin_email=getattr(args, "admin_email", None))
     db.commit()
     return empresa.codigo_acceso
 
@@ -38,6 +39,7 @@ def main(argv=None) -> int:
     p.add_argument("--sucursal", default="Casa matriz", help="Nombre de la primera sucursal")
     p.add_argument("--admin-nombre", required=True, help="Nombre de la persona administradora")
     p.add_argument("--admin-usuario", required=True, help="Usuario con el que inicia sesión")
+    p.add_argument("--admin-email", default=None, help="Correo del administrador (con él entra a la web sin código)")
     p.add_argument("--pais", default="CL", help="País (2 letras): CL, VE...")
     p.add_argument("--moneda", default="CLP", help="Moneda: CLP, VES, USD...")
     args = p.parse_args(argv)

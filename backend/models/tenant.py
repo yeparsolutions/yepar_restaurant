@@ -38,6 +38,9 @@ class Empresa(Base):
     pais:          Mapped[str]           = mapped_column(String(2), default="CL")
     moneda:        Mapped[str]           = mapped_column(String(10), default="CLP")
     activa:        Mapped[bool]          = mapped_column(Boolean, default=True)
+    # Las tablets se vinculan con un enlace firmado que lleva este número. Subirlo invalida todos los enlaces
+    # y tablets vinculadas hasta ahora (por si se pierde o roban una).
+    vinculo_version: Mapped[int]         = mapped_column(Integer, default=1, server_default="1")
     creado_en:     Mapped[datetime]      = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     sucursales: Mapped[list["Sucursal"]] = relationship(back_populates="empresa", cascade="all, delete-orphan")

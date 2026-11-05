@@ -158,3 +158,13 @@ legend { font-weight: 600; font-size: 0.875rem; padding: 0; margin-bottom: 4px; 
 .barra-margen.alto { background: #16a34a; }
 .barra-margen.medio { background: #f59e0b; }
 .barra-margen.bajo { background: #dc2626; }
+
+/* Tablet vinculada */
+.tarjeta.ancha { max-width: 640px; }
+.nombres { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; margin-top: 8px; }
+.nombre { display: grid; gap: 2px; min-height: 76px; text-align: left; background: var(--violeta-suave); color: var(--violeta-fuerte); border: 1px solid var(--violeta); padding: 12px 14px; }
+.nombre:hover:not(:disabled) { background: var(--borde); }
+.nombre small { color: var(--suave); font-weight: 400; }
+@media (prefers-color-scheme: dark) { .nombre { color: var(--texto); } }
+.enlace-tablet { display: block; word-break: break-all; background: var(--fondo); border: 1px dashed var(--borde); border-radius: 10px; padding: 10px 12px; font: 0.85rem ui-monospace, Menlo, Consolas, monospace; margin: 8px 0; user-select: all; }
+.formulario.aviso { margin: 0 0 16px; border-color: var(--violeta); }

@@ -3,7 +3,7 @@
 // El panel del administrador: Inicio (asistente de arranque), Carga por Excel y Equipo (locales y personal).
 // ============================================================
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { descargar, ErrorApi, pedir, type Sesion } from "./api";
+import { descargar, ErrorApi, guardarSesion, pedir, type Sesion } from "./api";
 import { Marca } from "./App";
 import Configuracion from "./Configuracion";
 import ResumenDia from "./Resumen";
@@ -32,12 +32,12 @@ export default function Panel({ sesion, alSalir }: { sesion: Sesion; alSalir: ()
           ))}
         </nav>
         <div className="usuario">
-          {sesion.codigo_acceso && <span className="chip" title="Código de acceso del restaurante">Código {sesion.codigo_acceso}</span>}
           <span>{sesion.usuario.nombre}</span>
           <button className="secundario" onClick={alSalir}>Salir</button>
         </div>
       </header>
       <main className="contenido">
+        <AvisoCorreo sesion={sesion} />
         {pestana === "resumen" && <ResumenDia sesion={sesion} />}
         {pestana === "inicio" && <Inicio ir={setPestana} />}
         {pestana === "carga" && <Carga />}
@@ -209,6 +209,7 @@ function Equipo() {
     <section>
       <h1>Equipo</h1>
       {error && <p className="error" role="alert">{error}</p>}
+      <Tablets />
       <h2>Locales</h2>
       <ul className="lista">
         {locales.map((l) => <li key={l.id}>{l.nombre}</li>)}
@@ -318,5 +319,92 @@ function NuevaPersona({ locales, alCrear }: { locales: Sucursal[]; alCrear: () =
       {hecho && <p className="exito" role="status">{hecho}</p>}
       <button>Agregar persona</button>
     </form>
+  );
+}
+
+// ── Correo del administrador ─────────────────────────────────
+function AvisoCorreo({ sesion }: { sesion: Sesion }) {
+  const [oculto, setOculto] = useState(false);
+  const [correo, setCorreo] = useState("");
+  const [clave, setClave] = useState("");
+  const [error, setError] = useState("");
+  if (sesion.usuario.email || oculto) return null;
+
+  async function guardar(e: FormEvent) {
+    e.preventDefault();
+    setError("");
+    try {
+      const u = await pedir<Sesion["usuario"]>("/auth/correo", { json: { email: correo, password: clave } });
+      guardarSesion({ ...sesion, usuario: u }); // se recuerda para no volver a mostrar el aviso
+      setOculto(true);
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+  return (
+    <form className="formulario aviso" onSubmit={guardar}>
+      <h3>Agrega tu correo</h3>
+      <p className="suave">Con tu correo y contraseña entras desde cualquier lugar, sin código de restaurante.</p>
+      <div className="fila">
+        <label className="campo"><span>Correo</span><input type="email" value={correo} onChange={(e) => setCorreo(e.target.value)} autoComplete="email" required /></label>
+        <label className="campo"><span>Tu contraseña actual</span><input type="password" value={clave} onChange={(e) => setClave(e.target.value)} autoComplete="current-password" required /></label>
+      </div>
+      {error && <p className="error" role="alert">{error}</p>}
+      <button>Guardar correo</button>
+    </form>
+  );
+}
+
+// ── Tablets: vincular y desvincular ──────────────────────────
+function Tablets() {
+  const [enlace, setEnlace] = useState("");
+  const [msg, setMsg] = useState<{ ok: boolean; texto: string } | null>(null);
+
+  async function generar() {
+    setMsg(null);
+    try {
+      const r = await pedir<{ token: string }>("/acceso/vinculo", { metodo: "POST", json: {} });
+      setEnlace(`${location.origin}${location.pathname}#/vincular/${encodeURIComponent(r.token)}`);
+    } catch (e) {
+      setMsg({ ok: false, texto: (e as Error).message });
+    }
+  }
+  async function copiar() {
+    try {
+      await navigator.clipboard.writeText(enlace);
+      setMsg({ ok: true, texto: "Enlace copiado. Ábrelo en la tablet." });
+    } catch {
+      setMsg({ ok: false, texto: "No se pudo copiar solo: selecciona el enlace y cópialo." });
+    }
+  }
+  async function desvincular() {
+    if (!confirm("¿Desvincular TODAS las tablets? Cada una tendrá que vincularse de nuevo con un enlace nuevo.")) return;
+    try {
+      await pedir("/acceso/vinculos", { metodo: "DELETE" });
+      setEnlace("");
+      setMsg({ ok: true, texto: "Listo: todas las tablets quedaron desvinculadas." });
+    } catch (e) {
+      setMsg({ ok: false, texto: (e as Error).message });
+    }
+  }
+  return (
+    <div className="bloque">
+      <h2>Tablets</h2>
+      <p className="suave">
+        Abre el enlace una sola vez en cada tablet (salón, cocina, caja) y quedará recordada: tu equipo entra tocando su nombre, sin
+        escribir códigos. Si se pierde o te roban una tablet, desvincula todas y vuelve a vincular las que sigas usando.
+      </p>
+      <div className="acciones">
+        <button onClick={generar}>Generar enlace de vinculación</button>
+        <button className="secundario" onClick={desvincular}>Desvincular todas las tablets</button>
+      </div>
+      {enlace && (
+        <>
+          <code className="enlace-tablet">{enlace}</code>
+          <button className="secundario" onClick={copiar}>Copiar enlace</button>
+        </>
+      )}
+      {msg && <p className={msg.ok ? "exito" : "error"} role="status">{msg.texto}</p>}
+    </div>
   );
 }

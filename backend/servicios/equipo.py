@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from errores import ErrorNegocio, ErrorNoEncontrado
 from models import Empresa, EstacionCocina, RolUsuario, Sucursal, Usuario, UsuarioRol
 from seguridad import encriptar_password, verificar_password
+from servicios import acceso
 
 MIN_PASSWORD = 8
 # Sin 0/O/1/I para que el dueño pueda dictar el código por teléfono sin confusiones.
@@ -94,7 +95,7 @@ def _validar_puesto(db: Session, empresa_id: int, roles: set, sucursal_id: Optio
 
 def crear_persona(db: Session, *, empresa_id: int, nombre: str, username: str, password: str, roles: Iterable,
                   sucursal_id: Optional[int] = None, estacion: Optional[str] = None,
-                  descuento_max_pct=0) -> Usuario:
+                  descuento_max_pct=0, email: Optional[str] = None) -> Usuario:
     nombre, username = _limpio(nombre), _limpio(username)
     if not nombre or not username:
         raise ErrorNegocio("Indica el nombre y el usuario.")
@@ -105,8 +106,12 @@ def crear_persona(db: Session, *, empresa_id: int, nombre: str, username: str, p
     _validar_puesto(db, empresa_id, roles, sucursal_id, estacion, pct)
     if db.query(Usuario).filter(Usuario.empresa_id == empresa_id, func.lower(Usuario.username) == username.lower()).first():
         raise ErrorNegocio(f"El usuario '{username}' ya existe.")
+    correo = None
+    if email:
+        correo = acceso.normalizar_correo(email)
+        acceso.correo_libre(db, correo)
     u = Usuario(empresa_id=empresa_id, nombre=nombre, username=username, password_hash=encriptar_password(password),
-                sucursal_id=sucursal_id, estacion=estacion, descuento_max_pct=pct)
+                sucursal_id=sucursal_id, estacion=estacion, descuento_max_pct=pct, email=correo)
     u.roles = [UsuarioRol(rol=r) for r in sorted(roles, key=lambda r: r.value)]
     db.add(u)
     db.flush()
@@ -183,7 +188,8 @@ def _codigo_libre(db: Session) -> str:
 
 
 def crear_restaurante(db: Session, *, nombre: str, sucursal: str, admin_nombre: str, admin_usuario: str,
-                      admin_password: str, pais: str = "CL", moneda: str = "CLP") -> tuple[Empresa, Sucursal, Usuario]:
+                      admin_password: str, pais: str = "CL", moneda: str = "CLP",
+                      admin_email: Optional[str] = None) -> tuple[Empresa, Sucursal, Usuario]:
     """El alta de un cliente nuevo: restaurante + primera sucursal + su administrador. Devuelve los tres."""
     nombre = _limpio(nombre)
     if not nombre:
@@ -193,5 +199,6 @@ def crear_restaurante(db: Session, *, nombre: str, sucursal: str, admin_nombre: 
     db.flush()
     suc = crear_sucursal(db, empresa_id=empresa.id, nombre=sucursal)
     admin = crear_persona(db, empresa_id=empresa.id, nombre=admin_nombre, username=admin_usuario,
-                          password=admin_password, roles=[RolUsuario.administrador], sucursal_id=suc.id)
+                          password=admin_password, roles=[RolUsuario.administrador], sucursal_id=suc.id,
+                          email=admin_email)
     return empresa, suc, admin
