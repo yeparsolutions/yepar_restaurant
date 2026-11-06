@@ -37,6 +37,7 @@ export default function Configuracion({ sesion }: { sesion: Sesion }) {
       {local !== null && <Mesas key={`m${local}`} local={local} />}
       {local !== null && <Cajas key={`c${local}`} local={local} />}
       <Propina />
+      <PinSupervisor />
       <Facturador />
     </section>
   );
@@ -387,5 +388,39 @@ function Facturador() {
         </form>
       )}
     </div>
+  );
+}
+
+
+// ── PIN de supervisor ─────────────────────────────────────────
+// Con este PIN el administrador autoriza en la caja un descuento mayor al tope del cajero.
+function PinSupervisor() {
+  const [pin, setPin] = useState("");
+  const [clave, setClave] = useState("");
+  const [msg, setMsg] = useState<{ ok: boolean; texto: string } | null>(null);
+  async function guardar(e: React.FormEvent) {
+    e.preventDefault();
+    setMsg(null);
+    try {
+      await pedir("/supervisor/pin", { metodo: "PUT", json: { pin, password: clave } });
+      setPin(""); setClave("");
+      setMsg({ ok: true, texto: "PIN guardado. El cajero podrá pedírtelo para descuentos sobre su tope." });
+    } catch (err) {
+      setMsg({ ok: false, texto: (err as Error).message });
+    }
+  }
+  return (
+    <>
+      <h2>PIN de supervisor</h2>
+      <p className="suave">De 4 a 6 dígitos. Lo tecleas en la caja para autorizar un descuento mayor al tope del cajero (el tope se define en Equipo).</p>
+      <form className="formulario" style={{ marginTop: 0 }} onSubmit={guardar}>
+        <div className="fila">
+          <label className="campo"><span>Nuevo PIN</span><input type="password" inputMode="numeric" pattern="[0-9]{4,6}" minLength={4} maxLength={6} value={pin} onChange={(e) => setPin(e.target.value)} autoComplete="off" required /></label>
+          <label className="campo"><span>Tu contraseña</span><input type="password" value={clave} onChange={(e) => setClave(e.target.value)} autoComplete="current-password" required /></label>
+        </div>
+        {msg && <p className={msg.ok ? "exito" : "error"} role="status">{msg.texto}</p>}
+        <button type="submit">Guardar PIN</button>
+      </form>
+    </>
   );
 }

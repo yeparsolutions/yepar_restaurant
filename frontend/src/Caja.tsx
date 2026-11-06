@@ -18,6 +18,7 @@ type Cuenta = { subtotal: string; descuento: string; propina: string; total: str
 type Linea = { id: string; nombre: string; cantidad: number; estado: string; total: string };
 type Pedido = { id: string; mesa: string | null; estado: string; lineas: Linea[]; cuenta: Cuenta };
 type Pago = { vuelto: string | null; pedido_estado: string; documento_estado: string | null; documento_folio: string | null; cuenta: Cuenta };
+type Supervisor = { id: number; nombre: string };
 type Saldo = { mesero_id: number | null; nombre: string | null; monto: string };
 type Arqueo = { fondo: string; efectivo_cobrado: string; esperado: string; cantidad_pagos: number };
 
@@ -186,7 +187,19 @@ function Cobro({ pedidoId, alVolver }: { pedidoId: string; alVolver: () => void 
     try { await fn(); if (ok) setAviso(ok); setMonto(""); } catch (e: any) { setError(e.message); } finally { setOcupado(false); recargar(); }
   };
   const propina = (m: number | null) => hacer(() => pedir(`/pedidos/${pedidoId}/propina`, { json: m === null ? {} : { monto: String(m) } }), "Propina anotada.");
-  const aplicarDescuento = () => hacer(() => pedir(`/pedidos/${pedidoId}/descuento`, { json: { porcentaje: descuento } }), "Descuento aplicado.");
+  const [pidePin, setPidePin] = useState(false);
+  const aplicarDescuento = async (sup?: { supervisor_id: number; pin_supervisor: string }) => {
+    setOcupado(true); setError(""); setAviso("");
+    try {
+      await pedir(`/pedidos/${pedidoId}/descuento`, { json: { porcentaje: descuento, ...sup } });
+      setAviso("Descuento aplicado.");
+      setPidePin(false);
+    } catch (e: any) {
+      // Si pasa del tope del cajero, la API pide el PIN de un supervisor: se abre el diálogo para teclearlo.
+      if (!sup && /PIN de un supervisor/i.test(e.message)) setPidePin(true);
+      else { setError(e.message); if (sup) throw e; }
+    } finally { setOcupado(false); recargar(); }
+  };
   const cobrar = (ev: React.FormEvent) => {
     ev.preventDefault();
     hacer(async () => {
@@ -252,7 +265,7 @@ function Cobro({ pedidoId, alVolver }: { pedidoId: string; alVolver: () => void 
             </div>
             <div className="en-linea">
               <input type="number" inputMode="decimal" min="0" max="100" placeholder="Descuento %" aria-label="Descuento en porcentaje" value={descuento} onChange={(e) => setDescuento(e.target.value)} />
-              <button className="secundario" disabled={ocupado || !descuento} onClick={aplicarDescuento}>Aplicar</button>
+              <button className="secundario" disabled={ocupado || !descuento} onClick={() => aplicarDescuento()}>Aplicar</button>
             </div>
 
             <h2>Cobrar</h2>
@@ -291,7 +304,45 @@ function Cobro({ pedidoId, alVolver }: { pedidoId: string; alVolver: () => void 
           </>
         )}
       </section>
+      {pidePin && <PinSupervisorDialogo porcentaje={descuento} alCerrar={() => setPidePin(false)} alAutorizar={(sup) => aplicarDescuento(sup)} />}
     </div>
+  );
+}
+
+/** Un supervisor (administrador con PIN) teclea su PIN para autorizar un descuento sobre el tope del cajero. */
+function PinSupervisorDialogo({ porcentaje, alCerrar, alAutorizar }: {
+  porcentaje: string; alCerrar: () => void; alAutorizar: (s: { supervisor_id: number; pin_supervisor: string }) => Promise<void>;
+}) {
+  const [sups, setSups] = useState<Supervisor[] | null>(null);
+  const [sup, setSup] = useState("");
+  const [pin, setPin] = useState("");
+  const [error, setError] = useState("");
+  useEffect(() => {
+    pedir<Supervisor[]>("/supervisores").then((l) => { setSups(l); setSup(String(l[0]?.id ?? "")); }).catch((e) => setError(e.message));
+  }, []);
+  const enviar = async (ev: React.FormEvent) => {
+    ev.preventDefault();
+    setError("");
+    try { await alAutorizar({ supervisor_id: Number(sup), pin_supervisor: pin }); } catch (e: any) { setError(e.message); setPin(""); }
+  };
+  return (
+    <Dialogo titulo="Autoriza un supervisor" alCerrar={alCerrar}>
+      <p className="suave">Un descuento de {porcentaje}% pasa de tu tope. Pide a un supervisor que teclee su PIN.</p>
+      {sups && sups.length === 0 ? (
+        <p className="error">Ningún administrador tiene PIN todavía. Pídele que lo cree en Configuración.</p>
+      ) : (
+        <form onSubmit={enviar} style={{ display: "grid", gap: 8 }}>
+          <label className="campo"><span>Supervisor</span>
+            <select value={sup} onChange={(e) => setSup(e.target.value)}>{(sups ?? []).map((s) => <option key={s.id} value={s.id}>{s.nombre}</option>)}</select>
+          </label>
+          <label className="campo"><span>PIN</span>
+            <input type="password" inputMode="numeric" maxLength={6} value={pin} onChange={(e) => setPin(e.target.value)} autoComplete="off" required />
+          </label>
+          {error && <p className="error" role="alert">{error}</p>}
+          <button type="submit" disabled={!sup || pin.length < 4}>Autorizar descuento</button>
+        </form>
+      )}
+    </Dialogo>
   );
 }
 
