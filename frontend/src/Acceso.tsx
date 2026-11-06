@@ -46,7 +46,7 @@ function Admin({ alIniciar, aviso, alEquipo }: { alIniciar: (s: Sesion) => void;
   return (
     <main className="centro">
       <div className="tarjeta">
-        <Marca />
+        <Marca grande />
         {aviso && <p className="exito" role="status">{aviso}</p>}
         {modo === "entrar" ? <Entrar alIniciar={alIniciar} /> : <Crear alCrear={setNueva} />}
         {registroAbierto && (
@@ -167,7 +167,7 @@ function Listo({ sesion, continuar }: { sesion: Sesion; continuar: () => void })
   return (
     <main className="centro">
       <div className="tarjeta">
-        <Marca />
+        <Marca grande />
         <h1>¡Tu restaurante está listo!</h1>
         <p className="suave">
           Entra a tu panel y carga tu carta. Cuando quieras usar tablets en el salón o la cocina, ve a <strong>Equipo → Tablets</strong> y
@@ -220,7 +220,7 @@ function Equipo(p: { alIniciar: (s: Sesion) => void; vinculo: string; aviso: str
     return (
       <main className="centro">
         <div className="tarjeta">
-          <Marca />
+          <Marca grande />
           <h1>Esta tablet ya no está vinculada</h1>
           <p className="error" role="alert">{error}</p>
           <button onClick={p.alAdmin}>Entrar como administrador</button>
@@ -233,7 +233,7 @@ function Equipo(p: { alIniciar: (s: Sesion) => void; vinculo: string; aviso: str
   return (
     <main className="centro">
       <div className="tarjeta ancha">
-        <Marca />
+        <Marca grande />
         {p.aviso && <p className="exito" role="status">{p.aviso}</p>}
         <h1>{tablet.restaurante}</h1>
         {!elegida ? (

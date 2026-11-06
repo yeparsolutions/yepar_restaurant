@@ -54,7 +54,7 @@ export default function App() {
     return (
       <main className="centro">
         <div className="tarjeta">
-          <Marca />
+          <Marca grande />
           <h1>Hola, {sesion.usuario.nombre}</h1>
           <p className="suave">
             Esta pantalla es para quien administra el restaurante. Tu pantalla de trabajo ({sesion.usuario.roles.join(", ")}) llegará
@@ -68,12 +68,18 @@ export default function App() {
   return <Panel sesion={sesion} alSalir={salir} />;
 }
 
-export function Marca() {
+/** La marca de Yepar Restaurant. Compacta (isotipo + nombre) en las barras; `grande` muestra el logo completo en las tarjetas de entrada. */
+export function Marca({ grande = false }: { grande?: boolean }) {
+  if (grande) {
+    return (
+      <div className="marca marca-grande">
+        <img src="/Yepar_Restaurant_Logo.svg" alt="Yepar Restaurant — Gestión integral para tu restaurant" />
+      </div>
+    );
+  }
   return (
     <div className="marca">
-      <svg width="28" height="28" viewBox="0 0 32 32" aria-hidden="true">
-        <path d="M16 2l12 7v14l-12 7-12-7V9z" fill="currentColor" />
-      </svg>
+      <img src="/Yepar_Restaurant_Isotipo.svg" alt="" width="26" height="31" />
       <span>Yepar Restaurant</span>
     </div>
   );

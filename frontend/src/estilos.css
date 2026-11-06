@@ -46,6 +46,9 @@ h3 { font-size: 1rem; margin: 0 0 0.75rem; }
 .centro { min-height: 100vh; display: grid; place-items: center; padding: 16px; }
 .tarjeta { width: 100%; max-width: 440px; background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 16px; padding: 24px; }
 .marca { display: flex; align-items: center; gap: 8px; color: var(--violeta); font-weight: 700; }
+.marca img { display: block; }
+.marca-grande { justify-content: center; margin-bottom: 8px; }
+.marca-grande img { width: min(100%, 260px); height: auto; }
 .cambio { text-align: center; color: var(--suave); margin: 1rem 0 0; }
 .codigo { font: 700 2rem/1 ui-monospace, Menlo, Consolas, monospace; letter-spacing: 0.25em; text-align: center; background: var(--violeta-suave); color: var(--violeta-fuerte); padding: 18px 8px; border-radius: var(--radio); margin: 1rem 0; user-select: all; }
 
@@ -224,3 +227,5 @@ legend { font-weight: 600; font-size: 0.875rem; padding: 0; margin-bottom: 4px; 
 .ticket button { min-height: 52px; font-size: 1.1rem; }
 .insumos { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
 .insumos li { display: flex; justify-content: space-between; align-items: center; gap: 8px; border: 1px solid var(--borde); border-radius: 10px; padding: 6px 10px; }
+/* En oscuro, el logo completo (texto gris) va sobre una placa blanca para que se lea */
+@media (prefers-color-scheme: dark) { .marca-grande img { background: #fff; border-radius: 12px; padding: 10px 14px; } }
