@@ -4,12 +4,16 @@
 // si hay, el panel. Solo el administrador usa el panel; el resto del equipo tendrá su pantalla de tablet.
 // ============================================================
 import { useEffect, useState } from "react";
-import { alExpirarSesion, guardarSesion, leerSesion, type Sesion } from "./api";
+import { alExpirarSesion, guardarSesion, guardarVinculo, leerSesion, leerVinculo, pedir, type Sesion } from "./api";
 import Acceso from "./Acceso";
 import Panel from "./Panel";
+import Mesero from "./Mesero";
+import Cocina from "./Cocina";
 
 export default function App() {
   const [sesion, setSesion] = useState<Sesion | null>(leerSesion);
+  const [vinculo, setVinculo] = useState<string | null>(leerVinculo);
+  const [aviso, setAviso] = useState("");
 
   const iniciar = (s: Sesion) => {
     guardarSesion(s);
@@ -21,8 +25,31 @@ export default function App() {
   };
   useEffect(() => alExpirarSesion(salir), []);
 
-  if (!sesion) return <Acceso alIniciar={iniciar} />;
+  // Enlace de vinculación (#/vincular/<token>): se comprueba, se recuerda en esta tablet y se limpia la dirección.
+  useEffect(() => {
+    const m = /^#\/vincular\/(.+)$/.exec(location.hash);
+    if (!m) return;
+    const token = decodeURIComponent(m[1]);
+    pedir(`/acceso/vinculo/${encodeURIComponent(token)}`, { token: "" })
+      .then(() => {
+        guardarVinculo(token);
+        setVinculo(token);
+        setAviso("¡Tablet vinculada! Desde ahora tu equipo entra tocando su nombre.");
+      })
+      .catch((e) => setAviso(e.message))
+      .finally(() => history.replaceState(null, "", location.pathname));
+  }, []);
 
+  if (!sesion) {
+    return <Acceso alIniciar={iniciar} vinculo={vinculo} aviso={aviso} alDesvincular={() => { guardarVinculo(null); setVinculo(null); }} />;
+  }
+
+  if (sesion.usuario.roles.includes("mesero") && !sesion.usuario.roles.includes("administrador")) {
+    return <Mesero sesion={sesion} alSalir={salir} />;
+  }
+  if (sesion.usuario.roles.includes("cocinero") && !sesion.usuario.roles.includes("administrador")) {
+    return <Cocina sesion={sesion} alSalir={salir} />;
+  }
   if (!sesion.usuario.roles.includes("administrador")) {
     return (
       <main className="centro">

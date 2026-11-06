@@ -6,8 +6,26 @@
 
 export const API_URL = (import.meta.env.VITE_API_URL ?? "http://localhost:8000").replace(/\/$/, "");
 
-export type Usuario = { id: number; nombre: string; roles: string[]; estacion: string | null; sucursal_id: number | null };
+export type Usuario = { id: number; nombre: string; roles: string[]; estacion: string | null; sucursal_id: number | null; email?: string | null };
 export type Sesion = { access_token: string; usuario: Usuario; codigo_acceso?: string };
+
+// El enlace de vinculación de ESTA tablet: se guarda una vez y el personal ya no escribe el código del restaurante.
+const CLAVE_VINCULO = "yepar_vinculo";
+export function leerVinculo(): string | null {
+  try {
+    return localStorage.getItem(CLAVE_VINCULO);
+  } catch {
+    return null;
+  }
+}
+export function guardarVinculo(token: string | null) {
+  try {
+    if (token) localStorage.setItem(CLAVE_VINCULO, token);
+    else localStorage.removeItem(CLAVE_VINCULO);
+  } catch {
+    /* sin almacenamiento: la tablet tendrá que vincularse de nuevo al recargar */
+  }
+}
 
 const CLAVE = "yepar_sesion";
 

@@ -158,3 +158,69 @@ legend { font-weight: 600; font-size: 0.875rem; padding: 0; margin-bottom: 4px; 
 .barra-margen.alto { background: #16a34a; }
 .barra-margen.medio { background: #f59e0b; }
 .barra-margen.bajo { background: #dc2626; }
+
+/* Tablet vinculada */
+.tarjeta.ancha { max-width: 640px; }
+.nombres { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; margin-top: 8px; }
+.nombre { display: grid; gap: 2px; min-height: 76px; text-align: left; background: var(--violeta-suave); color: var(--violeta-fuerte); border: 1px solid var(--violeta); padding: 12px 14px; }
+.nombre:hover:not(:disabled) { background: var(--borde); }
+.nombre small { color: var(--suave); font-weight: 400; }
+@media (prefers-color-scheme: dark) { .nombre { color: var(--texto); } }
+.enlace-tablet { display: block; word-break: break-all; background: var(--fondo); border: 1px dashed var(--borde); border-radius: 10px; padding: 10px 12px; font: 0.85rem ui-monospace, Menlo, Consolas, monospace; margin: 8px 0; user-select: all; }
+.formulario.aviso { margin: 0 0 16px; border-color: var(--violeta); }
+
+/* Mesero */
+.leyenda { display: flex; gap: 14px; flex-wrap: wrap; list-style: none; padding: 0; margin: 0 0 12px; color: var(--suave); font-size: 0.875rem; }
+.punto { display: inline-block; width: 12px; height: 12px; border-radius: 50%; vertical-align: middle; border: 2px solid var(--borde); }
+.punto.ocupada, .mesa-tab.ocupada { background: var(--violeta-suave); border-color: var(--violeta); }
+.punto.lista, .mesa-tab.lista { background: var(--ok-fondo); border-color: var(--ok); }
+.punto.cuenta_pedida, .mesa-tab.cuenta_pedida { background: var(--mal-fondo); border-color: var(--mal); }
+.mesa-tab { position: absolute; display: grid; place-content: center; padding: 4px; text-align: center; line-height: 1.2; background: var(--tarjeta); color: var(--texto); border: 2px solid var(--borde); border-radius: 10px; }
+.mesa-tab:hover:not(:disabled) { background: var(--violeta-suave); }
+.mesa-tab.ocupada:hover:not(:disabled) { background: var(--violeta-suave); }
+.mesa-tab.lista { animation: latido 1.4s ease-in-out infinite; }
+@keyframes latido { 50% { box-shadow: 0 0 0 6px var(--ok-fondo); } }
+@media (prefers-reduced-motion: reduce) { .mesa-tab.lista { animation: none; } }
+.mesa-tab.redonda { border-radius: 50%; }
+.mesa-tab small { color: var(--suave); }
+.pedido-grid { display: grid; gap: 24px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); align-items: start; }
+.lineas { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+.linea { display: flex; gap: 10px; align-items: center; background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 10px; padding: 10px 12px; }
+.linea > div { flex: 1; display: grid; }
+.linea.cancelada { opacity: 0.5; text-decoration: line-through; }
+.linea.lista { border-color: var(--ok); }
+.estado { font-size: 0.75rem; font-weight: 700; color: var(--violeta-fuerte); background: var(--violeta-suave); border-radius: 999px; padding: 2px 8px; }
+.estado.lista { color: var(--ok); background: var(--ok-fondo); }
+.totales { display: flex; justify-content: space-between; font-size: 1.25rem; margin: 16px 0 4px; }
+.categorias { display: flex; gap: 4px; overflow-x: auto; margin: 10px 0; }
+.carta { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; }
+.plato { display: grid; gap: 2px; justify-items: center; align-content: start; padding: 8px; min-height: 120px; background: var(--tarjeta); color: var(--texto); border: 1px solid var(--borde); text-align: center; }
+.plato:hover:not(:disabled) { background: var(--violeta-suave); }
+.plato img { width: 100%; height: 80px; object-fit: cover; border-radius: 8px; }
+.plato .sinfoto { font-size: 2rem; line-height: 80px; }
+.plato.falta { border-color: var(--mal); }
+.aviso-falta { color: var(--mal); }
+.velo { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5); display: grid; place-items: center; padding: 16px; z-index: 10; }
+.dialogo { width: 100%; max-width: 440px; max-height: 90vh; overflow-y: auto; background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 16px; padding: 20px; display: grid; gap: 8px; }
+.numeros { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.fila-cant { display: flex; gap: 20px; align-items: center; justify-content: center; font-size: 1.5rem; }
+.grupo { border: 1px solid var(--borde); border-radius: 10px; padding: 8px 12px; margin: 0; }
+.grupo legend { font-weight: 700; padding: 0 6px; }
+
+/* Cocina y barra */
+.ancho-riel { max-width: none; }
+.riel { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; align-items: start; }
+.ticket { background: var(--tarjeta); border: 2px solid var(--borde); border-radius: 12px; padding: 14px; display: grid; gap: 6px; }
+.ticket header { display: flex; justify-content: space-between; align-items: center; font-size: 1.1rem; }
+.ticket h2 { margin: 0; font-size: 1.3rem; }
+.ticket ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 2px; }
+.ticket .sin { color: var(--mal); font-weight: 700; }
+.ticket .con { color: var(--ok); font-weight: 700; }
+.ticket .nota { font-style: italic; }
+.ticket.en_preparacion { border-color: var(--violeta); background: var(--violeta-suave); }
+.ticket.tarde { border-color: var(--mal); }
+.ticket.tarde .espera { color: var(--mal); font-weight: 700; }
+.espera { font-size: 0.9rem; color: var(--suave); }
+.ticket button { min-height: 52px; font-size: 1.1rem; }
+.insumos { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+.insumos li { display: flex; justify-content: space-between; align-items: center; gap: 8px; border: 1px solid var(--borde); border-radius: 10px; padding: 6px 10px; }

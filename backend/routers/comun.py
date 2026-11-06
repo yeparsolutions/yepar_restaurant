@@ -15,7 +15,7 @@ from esquemas import (CuentaOut, DisponibilidadOut, FaltaOut, LineaOut, PedidoOu
 
 def usuario_out(u: Usuario) -> UsuarioOut:
     return UsuarioOut(id=u.id, nombre=u.nombre, roles=sorted(r.rol.value for r in u.roles),
-                      estacion=u.estacion.value if u.estacion else None, sucursal_id=u.sucursal_id)
+                      estacion=u.estacion.value if u.estacion else None, sucursal_id=u.sucursal_id, email=u.email)
 
 
 def linea_out(l: LineaPedido) -> LineaOut:

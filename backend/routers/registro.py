@@ -26,6 +26,7 @@ from pydantic import BaseModel
 from routers.comun import usuario_out
 from semilla import sembrar_unidades
 from seguridad import crear_token
+from servicios import acceso
 from servicios.equipo import crear_restaurante
 
 router = APIRouter(tags=["registro"])
@@ -38,7 +39,7 @@ class RegistroIn(Entrada):
     nombre_restaurante: str = Field(min_length=1, max_length=120)
     sucursal: str = Field(default="Casa matriz", min_length=1, max_length=120)
     admin_nombre: str = Field(min_length=1, max_length=120)
-    admin_usuario: str = Field(min_length=1, max_length=50)
+    email: str = Field(min_length=3, max_length=150)        # con él entra el administrador (sin código)
     password: str = Field(min_length=1, max_length=200)
     pais: str = Field(default="CL", min_length=2, max_length=2)
     moneda: str = Field(default="CLP", min_length=3, max_length=3)
@@ -86,10 +87,12 @@ def registrar(datos: RegistroIn, request: Request, db: Session = Depends(get_db)
         raise HTTPException(status_code=403, detail="El registro está cerrado. Pide el alta a Yepar.")
     _controlar_ritmo(_direccion(request))
     sembrar_unidades(db)                                   # sin las unidades (g, kg, ml…) nada funciona
+    correo = acceso.normalizar_correo(datos.email)         # el usuario interno es el propio correo
     try:
         empresa, _sucursal, admin = crear_restaurante(
             db, nombre=datos.nombre_restaurante, sucursal=datos.sucursal, admin_nombre=datos.admin_nombre,
-            admin_usuario=datos.admin_usuario, admin_password=datos.password, pais=datos.pais, moneda=datos.moneda)
+            admin_usuario=correo[:50], admin_password=datos.password, pais=datos.pais, moneda=datos.moneda,
+            admin_email=correo)
     except ErrorNegocio:
         db.rollback()                                      # que no quede un restaurante a medio crear
         raise

@@ -8,7 +8,7 @@ import pytest
 from models import Empresa, Unidad
 from routers import registro
 
-DATOS = {"nombre_restaurante": "Hamburguesería Demo", "admin_nombre": "Alberto", "admin_usuario": "alberto",
+DATOS = {"nombre_restaurante": "Hamburguesería Demo", "admin_nombre": "Alberto", "email": "Alberto@Demo.cl",
          "password": "clave-segura-1"}
 
 
@@ -29,9 +29,9 @@ def test_registro_crea_todo_y_deja_la_sesion_iniciada(db, cliente):
     # El token que devolvió ya sirve, y el login normal también.
     yo = cliente.get("/auth/yo", headers={"Authorization": f"Bearer {cuerpo['access_token']}"})
     assert yo.status_code == 200 and yo.json()["nombre"] == "Alberto"
-    login = cliente.post("/auth/login", json={"codigo_empresa": cuerpo["codigo_acceso"], "username": "alberto",
-                                              "password": "clave-segura-1"})
-    assert login.status_code == 200
+    # Entra con su correo, sin código (y sin distinguir mayúsculas).
+    login = cliente.post("/auth/login", json={"email": "alberto@demo.cl", "password": "clave-segura-1"})
+    assert login.status_code == 200 and login.json()["usuario"]["roles"] == ["administrador"]
 
 
 def test_contrasena_corta_se_rechaza_y_no_deja_restos(db, cliente):
@@ -53,9 +53,9 @@ def test_registro_cerrado_por_el_interruptor(cliente, monkeypatch):
 def test_tope_de_altas_por_hora_y_por_direccion(cliente, monkeypatch):
     monkeypatch.setenv("REGISTRO_MAX_POR_HORA", "2")
     for i in range(2):
-        assert cliente.post("/registro", json={**DATOS, "admin_usuario": f"dueno{i}"}).status_code == 201
-    assert cliente.post("/registro", json={**DATOS, "admin_usuario": "dueno9"}).status_code == 429
+        assert cliente.post("/registro", json={**DATOS, "email": f"dueno{i}@demo.cl"}).status_code == 201
+    assert cliente.post("/registro", json={**DATOS, "email": "dueno9@demo.cl"}).status_code == 429
     # Otra dirección distinta no está bloqueada.
-    otra = cliente.post("/registro", json={**DATOS, "admin_usuario": "dueno9"},
+    otra = cliente.post("/registro", json={**DATOS, "email": "dueno9@demo.cl"},
                         headers={"x-forwarded-for": "203.0.113.7"})
     assert otra.status_code == 201

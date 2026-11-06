@@ -12,7 +12,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Annotated, Literal, Optional
 
-from pydantic import BaseModel, Field, PlainSerializer
+from pydantic import BaseModel, Field, PlainSerializer, model_validator
 
 
 # Montos: siempre con 2 decimales y como TEXTO ("6500.00"); cantidades de stock con 3.
@@ -29,9 +29,46 @@ class Entrada(BaseModel):
 
 # ── Auth ─────────────────────────────────────────────────────
 class LoginIn(Entrada):
-    codigo_empresa: str = Field(min_length=1, max_length=50)
-    username: str = Field(min_length=1, max_length=50)
+    """
+    Tres formas de entrar (se elige según lo que llegue):
+      · email + password                      → el administrador (el correo es único en todo el sistema).
+      · vinculo + username + password         → el personal, desde una tablet ya vinculada.
+      · codigo_empresa + username + password  → la forma clásica (scripts y compatibilidad).
+    """
+    email: Optional[str] = Field(default=None, max_length=150)
+    vinculo: Optional[str] = Field(default=None, max_length=1000)
+    codigo_empresa: Optional[str] = Field(default=None, max_length=50)
+    username: Optional[str] = Field(default=None, max_length=50)
     password: str = Field(min_length=1, max_length=200)
+
+    @model_validator(mode="after")
+    def _una_forma_completa(self):
+        if self.email:
+            return self
+        if self.username and (self.vinculo or self.codigo_empresa):
+            return self
+        raise ValueError("Indica tu correo, o tu usuario con el código o el enlace de la tablet.")
+
+
+class CorreoIn(Entrada):
+    email: str = Field(min_length=3, max_length=150)
+    password: str = Field(min_length=1, max_length=200)          # se pide la clave para cambiar el correo
+
+
+class VinculoOut(BaseModel):
+    token: str
+
+
+class PersonaTabletOut(BaseModel):
+    nombre: str
+    username: str
+    roles: list[str]
+    estacion: Optional[str] = None
+
+
+class TabletOut(BaseModel):
+    restaurante: str
+    personal: list[PersonaTabletOut]
 
 
 class UsuarioOut(BaseModel):
@@ -40,6 +77,7 @@ class UsuarioOut(BaseModel):
     roles: list[str]
     estacion: Optional[str] = None
     sucursal_id: Optional[int] = None
+    email: Optional[str] = None
 
 
 class TokenOut(BaseModel):
@@ -110,9 +148,19 @@ class DisponibilidadOut(BaseModel):
     faltas: list[FaltaOut]
 
 
+class OpcionCartaOut(BaseModel):
+    """Algo que el mesero puede quitar (id del ingrediente) o agregar (id del extra)."""
+    id: int
+    nombre: str
+    precio: Optional[Dinero] = None
+
+
 class ItemCartaOut(BaseModel):
     item_id: int
     nombre: str
+    categoria: Optional[str] = None
+    removibles: list[OpcionCartaOut] = []
+    extras: list[OpcionCartaOut] = []
     precio_venta: Optional[Dinero] = None
     foto_url: Optional[str] = None
     estacion: str
@@ -223,6 +271,13 @@ class ComandaOut(BaseModel):
 class ListoOut(BaseModel):
     linea: LineaOut
     sin_stock: list[str]                  # ingredientes que quedaron en negativo
+
+
+class InsumoCocinaOut(BaseModel):
+    """Algo que el cocinero puede marcar como 'se acabó' (o volver a marcar como disponible)."""
+    item_id: int
+    nombre: str
+    agotado: bool
 
 
 class AgotadoOut(BaseModel):

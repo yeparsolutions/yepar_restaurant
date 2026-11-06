@@ -120,6 +120,14 @@ def test_la_carta_solo_muestra_vendibles_con_su_semaforo(api):
     assert carta["Hamburguesa"]["faltas"][0]["nombre"] == "Carne" and carta["Hamburguesa"]["faltas"][0]["agotado_manual"]
 
 
+def test_la_carta_ofrece_lo_que_se_puede_quitar_y_agregar(api):
+    carta = {x["nombre"]: x for x in api.get("ana", "/carta").json()}
+    burger = carta["Hamburguesa"]
+    assert [(o["id"], o["nombre"]) for o in burger["removibles"]] == [(api.s["cebolla"].id, "Cebolla")]
+    assert [(o["nombre"], o["precio"]) for o in burger["extras"]] == [("Extra tocineta", "1000.00")]
+    assert carta["Cola lata"]["removibles"] == []
+
+
 def test_el_admin_arma_el_plano_y_el_mesero_se_ancla_por_qr(api):
     r = api.post("admin", "/mesas", {"nombre": "Terraza 1", "capacidad": 6, "pos_x": 10, "pos_y": 20, "forma": "redonda"})
     assert r.status_code == 201
@@ -244,3 +252,14 @@ def test_la_api_rechaza_datos_mal_formados(api):
     assert api.post("ana", f"/pedidos/{pedido['id']}/lineas", {"item_id": 1, "precio": 1}).status_code == 422   # campo extra
     assert api.post("ana", f"/pedidos/{pedido['id']}/lineas", {"item_id": api.s["burger"].id,
                                                                 "cantidad": 0}).status_code == 422             # regla de negocio
+
+
+def test_el_cocinero_ve_los_insumos_y_marca_lo_que_se_acabo(api):
+    r = api.get("chef", "/cocina/items")
+    assert r.status_code == 200
+    nombres = {x["nombre"]: x for x in r.json()}
+    assert "Carne" in nombres and "Hamburguesa" not in nombres and nombres["Carne"]["agotado"] is False
+    assert api.post("chef", f"/cocina/items/{api.s['carne'].id}/agotado").status_code == 200
+    r = api.get("chef", "/cocina/items").json()
+    assert r[0]["nombre"] == "Carne" and r[0]["agotado"] is True      # los agotados van primero
+    assert api.get("ana", "/cocina/items").status_code == 403           # el mesero no entra

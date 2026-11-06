@@ -10,8 +10,8 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from database import get_db
-from esquemas import AgotadoOut, ComandaOut, LineaOut, ListoOut
-from models import EstacionCocina, RolUsuario, Usuario
+from esquemas import AgotadoOut, ComandaOut, InsumoCocinaOut, LineaOut, ListoOut
+from models import EstacionCocina, Item, RolUsuario, TipoItem, Usuario
 from routers.comun import linea_out
 from seguridad import exigir_roles, resolver_sucursal
 from servicios import cocina as svc_cocina
@@ -50,6 +50,17 @@ def lista(linea_id: str, db: Session = Depends(get_db), usuario: Usuario = Depen
     r = svc_cocina.marcar_lista(db, empresa_id=usuario.empresa_id, linea_id=linea_id, usuario_id=usuario.id)
     db.commit()
     return ListoOut(linea=linea_out(r.linea), sin_stock=r.sin_stock)
+
+
+@router.get("/items", response_model=list[InsumoCocinaOut])
+def insumos(db: Session = Depends(get_db), usuario: Usuario = Depends(solo_cocina)):
+    """Ingredientes y bebidas de reventa activos, para el botón 'se acabó' (los agotados primero)."""
+    items = (db.query(Item)
+             .filter(Item.empresa_id == usuario.empresa_id, Item.activo.is_(True),
+                     Item.tipo.in_((TipoItem.materia_prima, TipoItem.vendible_reventa)))
+             .order_by(Item.nombre).all())
+    lista = [InsumoCocinaOut(item_id=i.id, nombre=i.nombre, agotado=bool(i.agotado_manual)) for i in items]
+    return sorted(lista, key=lambda x: not x.agotado)
 
 
 @router.post("/items/{item_id}/agotado", response_model=AgotadoOut)
