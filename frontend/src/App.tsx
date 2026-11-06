@@ -9,6 +9,7 @@ import Acceso from "./Acceso";
 import Panel from "./Panel";
 import Mesero from "./Mesero";
 import Cocina from "./Cocina";
+import Caja from "./Caja";
 
 export default function App() {
   const [sesion, setSesion] = useState<Sesion | null>(leerSesion);
@@ -49,6 +50,9 @@ export default function App() {
   }
   if (sesion.usuario.roles.includes("cocinero") && !sesion.usuario.roles.includes("administrador")) {
     return <Cocina sesion={sesion} alSalir={salir} />;
+  }
+  if (sesion.usuario.roles.includes("cajero") && !sesion.usuario.roles.includes("administrador")) {
+    return <Caja sesion={sesion} alSalir={salir} />;
   }
   if (!sesion.usuario.roles.includes("administrador")) {
     return (

@@ -647,6 +647,7 @@ class PropinaLibroOut(BaseModel):
 
 class SaldoPropinaOut(BaseModel):
     mesero_id: Optional[int] = None          # vacío = fondo grupal sin repartir
+    nombre: Optional[str] = None             # quién es (para la pantalla de caja)
     monto: Dinero
 
 

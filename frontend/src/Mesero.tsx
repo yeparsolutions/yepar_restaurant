@@ -32,11 +32,11 @@ const ETIQUETA_ESTADO: Record<string, string> = {
 };
 const ESTADOS_MESA: Record<EstadoMesa, string> = { libre: "Libre", ocupada: "Ocupada", lista: "Plato listo", cuenta_pedida: "Pidió la cuenta" };
 
-const plata = (v: string | number | null | undefined) => {
+export const plata = (v: string | number | null | undefined) => {
   const n = Number(v ?? 0);
   return "$" + n.toLocaleString("es-CL", { maximumFractionDigits: 2 });
 };
-const nuevoId = () => (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`);
+export const nuevoId = () => (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`);
 // La API entrega ids de lo quitado/agregado; los nombres salen de la carta.
 const nombresDe = (ids: number[], opciones: Opcion[]) => ids.map((i) => opciones.find((o) => o.id === i)?.nombre ?? "…").join(", ");
 

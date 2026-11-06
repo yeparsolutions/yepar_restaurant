@@ -74,8 +74,13 @@ def crear_caja(datos: NombreIn, db: Session = Depends(get_db), usuario: Usuario 
 
 @router.get("/cajas", response_model=list[CajaOut])
 def cajas(sucursal_id: Optional[int] = None, db: Session = Depends(get_db), usuario: Usuario = Depends(solo_caja)):
-    return [CajaOut(id=c.id, nombre=c.nombre, sucursal_id=c.sucursal_id) for c in svc_caja.listar_cajas(
-        db, empresa_id=usuario.empresa_id, sucursal_id=resolver_sucursal(usuario, sucursal_id))]
+    sucursal = resolver_sucursal(usuario, sucursal_id)
+    lista = svc_caja.listar_cajas(db, empresa_id=usuario.empresa_id, sucursal_id=sucursal)
+    if not lista:
+        # Un local recién creado todavía no tiene caja: se deja una "Caja 1" para que el cajero pueda abrir turno.
+        lista = [svc_caja.crear_caja(db, empresa_id=usuario.empresa_id, sucursal_id=sucursal, nombre="Caja 1")]
+        db.commit()
+    return [CajaOut(id=c.id, nombre=c.nombre, sucursal_id=c.sucursal_id) for c in lista]
 
 
 @router.post("/terminales", response_model=TerminalOut, status_code=201)
@@ -89,8 +94,13 @@ def crear_terminal(datos: NombreIn, db: Session = Depends(get_db), usuario: Usua
 @router.get("/terminales", response_model=list[TerminalOut])
 def terminales(sucursal_id: Optional[int] = None, db: Session = Depends(get_db),
                usuario: Usuario = Depends(personal_de_cobro)):
-    return [TerminalOut(id=t.id, nombre=t.nombre, sucursal_id=t.sucursal_id) for t in svc_caja.listar_terminales(
-        db, empresa_id=usuario.empresa_id, sucursal_id=resolver_sucursal(usuario, sucursal_id))]
+    sucursal = resolver_sucursal(usuario, sucursal_id)
+    lista = svc_caja.listar_terminales(db, empresa_id=usuario.empresa_id, sucursal_id=sucursal)
+    if not lista:
+        # Igual que la caja: un "Terminal 1" de partida para poder cobrar con tarjeta desde el primer día.
+        lista = [svc_caja.crear_terminal(db, empresa_id=usuario.empresa_id, sucursal_id=sucursal, nombre="Terminal 1")]
+        db.commit()
+    return [TerminalOut(id=t.id, nombre=t.nombre, sucursal_id=t.sucursal_id) for t in lista]
 
 
 # ── Turnos ───────────────────────────────────────────────────
@@ -224,7 +234,8 @@ def saldos(sucursal_id: Optional[int] = None, db: Session = Depends(get_db), usu
     """Cuánto se le debe a cada persona; sin mesero = fondo grupal sin repartir."""
     s = svc_propinas.saldos_por_entregar(db, empresa_id=usuario.empresa_id,
                                          sucursal_id=resolver_sucursal(usuario, sucursal_id))
-    return [SaldoPropinaOut(mesero_id=m, monto=v) for m, v in s.items()]
+    nombres = {u.id: u.nombre for u in db.query(Usuario).filter(Usuario.id.in_([m for m in s if m is not None] or [0])).all()}
+    return [SaldoPropinaOut(mesero_id=m, nombre=nombres.get(m), monto=v) for m, v in s.items()]
 
 
 @router.post("/propinas/entregar", response_model=EntregaPropinaOut)
