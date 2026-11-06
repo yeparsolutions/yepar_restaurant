@@ -370,7 +370,7 @@ function DialogoPlato({ plato, comensales, ocupado, alCerrar, alAgregar }: {
   );
 }
 
-function Dialogo({ titulo, alCerrar, children }: { titulo: string; alCerrar: () => void; children: React.ReactNode }) {
+export function Dialogo({ titulo, alCerrar, children }: { titulo: string; alCerrar: () => void; children: React.ReactNode }) {
   useEffect(() => {
     const tecla = (e: KeyboardEvent) => e.key === "Escape" && alCerrar();
     window.addEventListener("keydown", tecla);

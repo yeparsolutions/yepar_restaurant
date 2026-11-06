@@ -8,6 +8,7 @@ import { alExpirarSesion, guardarSesion, guardarVinculo, leerSesion, leerVinculo
 import Acceso from "./Acceso";
 import Panel from "./Panel";
 import Mesero from "./Mesero";
+import Cocina from "./Cocina";
 
 export default function App() {
   const [sesion, setSesion] = useState<Sesion | null>(leerSesion);
@@ -45,6 +46,9 @@ export default function App() {
 
   if (sesion.usuario.roles.includes("mesero") && !sesion.usuario.roles.includes("administrador")) {
     return <Mesero sesion={sesion} alSalir={salir} />;
+  }
+  if (sesion.usuario.roles.includes("cocinero") && !sesion.usuario.roles.includes("administrador")) {
+    return <Cocina sesion={sesion} alSalir={salir} />;
   }
   if (!sesion.usuario.roles.includes("administrador")) {
     return (
