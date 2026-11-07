@@ -9,6 +9,7 @@ import Acceso from "./Acceso";
 import Panel from "./Panel";
 import Mesero from "./Mesero";
 import Cocina from "./Cocina";
+import { fijarMoneda } from "./dinero";
 import Caja from "./Caja";
 
 export default function App() {
@@ -25,6 +26,13 @@ export default function App() {
     setSesion(null);
   };
   useEffect(() => alExpirarSesion(salir), []);
+
+  // La moneda del restaurante decide cómo se ven los montos ($, Bs., US$…). Se pide al entrar; sin red se usa la última guardada.
+  const [, setMoneda] = useState(0);
+  useEffect(() => {
+    if (!sesion) return;
+    pedir<{ moneda: string }>("/auth/empresa").then((e) => { fijarMoneda(e.moneda); setMoneda((n) => n + 1); }).catch(() => {});
+  }, [sesion?.access_token]);
 
   // Enlace de vinculación (#/vincular/<token>): se comprueba, se recuerda en esta tablet y se limpia la dirección.
   useEffect(() => {

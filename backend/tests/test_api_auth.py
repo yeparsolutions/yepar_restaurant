@@ -159,3 +159,12 @@ def test_el_correo_tambien_cuenta_sin_distinguir_mayusculas(db, cliente, local, 
         r = cliente.post("/auth/login", json={"email": ("Ana@Demo.cl" if i % 2 else "ana@demo.cl"), "password": "mala"})
         assert r.status_code == 401
     assert cliente.post("/auth/login", json={"email": "ANA@demo.CL", "password": "mala"}).status_code == 429
+
+
+def test_cada_persona_ve_la_moneda_de_su_restaurante(db, cliente, local, nuevo_usuario, cabeceras):
+    empresa, sucursal = local
+    empresa.moneda = "VES"
+    ana = crear_con_clave(db, nuevo_usuario, empresa, "Ana", "secreta123", sucursal_id=sucursal.id)
+    r = cliente.get("/auth/empresa", headers=cabeceras(ana))
+    assert r.status_code == 200 and r.json()["moneda"] == "VES" and r.json()["nombre"] == "Hamburguesería Demo"
+    assert cliente.get("/auth/empresa").status_code == 401

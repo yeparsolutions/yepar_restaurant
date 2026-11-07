@@ -6,6 +6,7 @@
 //   · Stock bajo: qué comprar
 //   · Rentabilidad de la carta: costo y margen de cada plato
 // ============================================================
+import { plata } from "./dinero";
 import { useCallback, useEffect, useState } from "react";
 import { pedir, type Sesion } from "./api";
 
@@ -17,7 +18,6 @@ type Compras = { lineas: unknown[]; costo_total_estimado: string };
 type Item = { id: number; nombre: string; tipo: string; precio_venta: string | null; tiene_receta: boolean };
 type Costo = { item_id: number; nombre: string; costo_unitario: string; precio_venta: string | null; margen_pct: string | null };
 
-const plata = (v: string | number) => "$" + Math.round(Number(v)).toLocaleString("es-CL");
 const num = (v: string) => Number(v).toLocaleString("es-CL", { maximumFractionDigits: 2 });
 const MEDIOS: Record<string, string> = { efectivo: "Efectivo", tarjeta: "Tarjeta", transferencia: "Transferencia" };
 

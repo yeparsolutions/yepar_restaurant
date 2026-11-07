@@ -50,6 +50,12 @@ class LoginIn(Entrada):
         raise ValueError("Indica tu correo, o tu usuario con el código o el enlace de la tablet.")
 
 
+class EmpresaOut(BaseModel):
+    nombre: str
+    moneda: str                          # código de 3 letras (CLP, VES, USD…): cómo se muestran los montos
+    pais: Optional[str] = None
+
+
 class CorreoIn(Entrada):
     email: str = Field(min_length=3, max_length=150)
     password: str = Field(min_length=1, max_length=200)          # se pide la clave para cambiar el correo
