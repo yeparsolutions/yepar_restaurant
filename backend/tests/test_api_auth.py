@@ -104,3 +104,58 @@ def test_el_rol_decide_a_que_puerta_entra(db, cliente, cabeceras, local, nuevo_u
 
 def test_salud_no_pide_sesion(cliente):
     assert cliente.get("/salud").json() == {"estado": "ok"}
+
+
+# ── Freno a los intentos de contraseña ───────────────────────
+def test_tras_cinco_fallos_la_persona_queda_bloqueada_aun_con_la_clave_buena(db, cliente, local, nuevo_usuario):
+    crear_con_clave(db, nuevo_usuario, local[0], "Ana", "secreta123")
+    for _ in range(5):
+        assert login(cliente, password="mala").status_code == 401
+    r = login(cliente, password="secreta123")                      # ya ni se mira la contraseña
+    assert r.status_code == 429 and "Espera" in r.json()["detail"] and int(r.headers["Retry-After"]) > 0
+
+
+def test_un_ingreso_correcto_borra_los_fallos_de_esa_persona(db, cliente, local, nuevo_usuario):
+    crear_con_clave(db, nuevo_usuario, local[0], "Ana", "secreta123")
+    for _ in range(4):
+        login(cliente, password="mala")
+    assert login(cliente).status_code == 200
+    for _ in range(4):                                             # vuelve a tener 4 intentos antes del bloqueo
+        assert login(cliente, password="mala").status_code == 401
+
+
+def test_el_bloqueo_se_levanta_pasada_la_ventana(db, cliente, local, nuevo_usuario, monkeypatch):
+    from servicios import limite_login
+    crear_con_clave(db, nuevo_usuario, local[0], "Ana", "secreta123")
+    ahora = [1000.0]
+    monkeypatch.setattr(limite_login, "_reloj", lambda: ahora[0])
+    for _ in range(5):
+        login(cliente, password="mala")
+    assert login(cliente).status_code == 429
+    ahora[0] += limite_login.VENTANA_SEGUNDOS + 1
+    assert login(cliente).status_code == 200
+
+
+def test_bloquear_a_una_persona_no_bloquea_a_otra_ni_a_otra_conexion(db, cliente, local, nuevo_usuario):
+    crear_con_clave(db, nuevo_usuario, local[0], "Ana", "secreta123")
+    crear_con_clave(db, nuevo_usuario, local[0], "Beto", "otraclave123")
+    for _ in range(5):
+        login(cliente, password="mala")
+    assert login(cliente, username="beto", password="otraclave123").status_code == 200
+    # Ana desde otra conexión (otra IP) sigue pudiendo entrar: un atacante no la deja fuera.
+    assert cliente.post("/auth/login", headers={"X-Forwarded-For": "203.0.113.9"},
+                        json={"codigo_empresa": "DEMO0001", "username": "ana", "password": "secreta123"}).status_code == 200
+
+
+def test_una_conexion_que_prueba_muchas_personas_se_bloquea(db, cliente, local, monkeypatch):
+    monkeypatch.setenv("LOGIN_MAX_FALLOS_POR_CONEXION", "6")
+    for i in range(6):
+        assert login(cliente, username=f"nadie{i}", password="x").status_code == 401
+    assert login(cliente, username="otro", password="x").status_code == 429
+
+
+def test_el_correo_tambien_cuenta_sin_distinguir_mayusculas(db, cliente, local, nuevo_usuario):
+    for i in range(5):
+        r = cliente.post("/auth/login", json={"email": ("Ana@Demo.cl" if i % 2 else "ana@demo.cl"), "password": "mala"})
+        assert r.status_code == 401
+    assert cliente.post("/auth/login", json={"email": "ANA@demo.CL", "password": "mala"}).status_code == 429

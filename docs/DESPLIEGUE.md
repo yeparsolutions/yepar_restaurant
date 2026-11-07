@@ -35,7 +35,7 @@ La web (`frontend/`) es un segundo servicio en el mismo proyecto de Railway:
 2. Variables del servicio web: `VITE_API_URL` = la dirección pública de la API (con `https://`, sin `/` al final). Debe estar **antes** del primer despliegue, porque se incorpora al compilar.
 3. Settings → Networking → **Generate Domain**.
 4. En el servicio **api**, variable `CORS_ORIGINS` = la dirección de la web (con `https://`, sin `/` al final). Sin esto el navegador bloquea las llamadas.
-5. Abre la web y pulsa **Crear mi restaurante** (con tu correo y contraseña): ya no hace falta el script de abajo. Para las tablets, en **Equipo → Tablets** genera un enlace y ábrelo una vez en cada una. Para cerrar el registro público (si solo Yepar da de alta clientes): `REGISTRO_ABIERTO=0` en el servicio api.
+5. Abre la web y pulsa **Crear mi restaurante** (con tu correo y contraseña): ya no hace falta el script de abajo. Para las tablets, en **Equipo → Tablets** genera un enlace y ábrelo una vez en cada una. Para cerrar el registro público (si solo Yepar da de alta clientes): `REGISTRO_ABIERTO=0` en el servicio api. El login frena los intentos de contraseña (por defecto 5 fallos por persona y conexión en 15 minutos, luego 429); se ajusta con `LOGIN_MAX_FALLOS*`. Los contadores viven en memoria: por eso el servicio corre con una sola réplica.
 
 ## Crear el primer restaurante (alternativa por terminal)
 
