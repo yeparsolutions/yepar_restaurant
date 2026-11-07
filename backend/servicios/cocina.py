@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session
 
 from errores import ErrorNegocio, ErrorNoEncontrado
 from models import (EstacionCocina, EstadoLinea, EstadoPedido, Extra, Item, LineaPedido, Pedido,
-                    RecetaLinea, RolUsuario, TipoItem, Usuario)
+                    RecetaLinea, RolUsuario, Usuario)
 from servicios.pedidos import cargar_linea
 from servicios.reservas import consumir_reserva
 from servicios.stock import cargar_item, obtener_stock, validar_sucursal
@@ -88,6 +88,22 @@ def _cargar_cocinero(db: Session, empresa_id: int, usuario_id: int, linea: Linea
     return usuario
 
 
+def hay_personal_en(db: Session, *, empresa_id: int, sucursal_id: int, estacion: str) -> bool:
+    """¿El local tiene a alguien activo atendiendo esa estación (p. ej. un barman en la barra)?"""
+    quienes = (db.query(Usuario).filter(Usuario.empresa_id == empresa_id, Usuario.activo.is_(True),
+                                        Usuario.estacion == EstacionCocina(estacion)).all())
+    return any(RolUsuario.cocinero in {r.rol for r in u.roles} and u.sucursal_id in (None, sucursal_id) for u in quienes)
+
+
+def sale_sin_preparar(db: Session, linea: LineaPedido) -> bool:
+    """
+    Las bebidas de un local SIN barman las busca el mesero directamente (lata, botella, trago servido por él).
+    Con barman registrado salen de la barra: el barman las marca listas y el mesero las retira.
+    """
+    return linea.estacion == "barra" and not hay_personal_en(
+        db, empresa_id=linea.empresa_id, sucursal_id=linea.pedido.sucursal_id, estacion="barra")
+
+
 def _exigir_pedido_vivo(linea: LineaPedido):
     if linea.pedido.estado not in _PEDIDOS_VIVOS:
         raise ErrorNegocio(f"El pedido está '{linea.pedido.estado.value}': ya no admite este cambio.")
@@ -137,12 +153,13 @@ def marcar_entregada(db: Session, *, empresa_id: int, linea_id: str, usuario_id:
     """
     El mesero retiró el plato y lo llevó a la mesa: lista → entregada.
 
-    Las bebidas de reventa (una lata, una botella) no las prepara nadie: el mesero las entrega directo
-    desde 'enviada'. Ahí se cierra la reserva igual que si hubieran pasado por 'lista' (el stock sale).
+    Si el local no tiene barman, las bebidas (barra) las busca el mesero: se entregan directo desde 'enviada'.
+    Ahí se cierra la reserva igual que si hubieran pasado por 'lista' (el stock sale). Con barman registrado,
+    las marca listas la barra y el mesero las retira.
     """
     linea = cargar_linea(db, empresa_id, linea_id)
     _exigir_pedido_vivo(linea)
-    if linea.estado in (EstadoLinea.enviada, EstadoLinea.en_preparacion) and linea.item.tipo == TipoItem.vendible_reventa:
+    if linea.estado in (EstadoLinea.enviada, EstadoLinea.en_preparacion) and sale_sin_preparar(db, linea):
         consumir_reserva(db, empresa_id=empresa_id, referencia_id=linea.id, usuario_id=usuario_id)
         linea.estado = EstadoLinea.lista
         linea.lista_en = _ahora()

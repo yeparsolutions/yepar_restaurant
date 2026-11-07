@@ -274,24 +274,36 @@ def test_el_mesero_ve_a_quien_puede_pasarle_una_mesa_y_se_la_pasa(api):
     assert api.post("ana", f"/pedidos/{pedido['id']}/traspaso", {"nuevo_mesero_id": otros[0]["id"]}).status_code == 403   # ya no es suya
 
 
-def test_una_bebida_de_reventa_se_entrega_directo_y_descuenta_el_stock(api, db):
+def test_sin_barman_el_mesero_busca_la_bebida_y_con_barman_sale_de_la_barra(api, db):
     from sqlalchemy import func
     from models import StockSucursal
-    carta = {x["nombre"]: x for x in api.get("ana", "/carta").json()}
-    assert carta["Cola lata"]["directo"] is True and carta["Hamburguesa"]["directo"] is False
 
     def fisico():
         return db.query(func.sum(StockSucursal.cantidad_fisica)).filter(StockSucursal.item_id == api.s["cola"].id).scalar()
 
+    def carta():
+        return {x["nombre"]: x for x in api.get("ana", "/carta").json()}
+
+    # Con barman registrado (el del fixture): la bebida sale de la barra, el mesero no puede saltársela.
+    assert carta()["Cola lata"]["directo"] is False
+    p1 = abrir_mesa(api, "m1")
+    cola1 = tomar(api, p1["id"], item="cola")["linea"]
+    assert api.post("ana", f"/pedidos/{p1['id']}/enviar").status_code == 200
+    assert api.post("ana", f"/lineas/{cola1['id']}/entregar").status_code == 422
+    assert api.post("barman", f"/cocina/lineas/{cola1['id']}/lista").status_code == 200       # la barra la marca lista…
+    assert api.post("ana", f"/lineas/{cola1['id']}/entregar").status_code == 200              # …y el mesero la retira y entrega
+
+    # Sin barman: el mesero busca la bebida y la entrega directo; el stock sale igual.
+    api.s["barman"].activo = False
+    db.commit()
+    assert carta()["Cola lata"]["directo"] is True and carta()["Hamburguesa"]["directo"] is False
     antes = fisico()
-    pedido = abrir_mesa(api)
-    cola = tomar(api, pedido["id"], item="cola")["linea"]
-    burger = tomar(api, pedido["id"], item="burger")["linea"]
-    assert api.post("ana", f"/pedidos/{pedido['id']}/enviar").status_code == 200
-    # El plato de cocina no se entrega hasta que cocina lo marque listo…
-    assert api.post("ana", f"/lineas/{burger['id']}/entregar").status_code == 422
-    # …pero la lata la entrega el mesero directo, sin pasar por nadie.
-    r = api.post("ana", f"/lineas/{cola['id']}/entregar")
+    p2 = abrir_mesa(api, "m2", persona="beto")
+    cola2 = tomar(api, p2["id"], item="cola", persona="beto")["linea"]
+    burger = tomar(api, p2["id"], item="burger", persona="beto")["linea"]
+    assert api.post("beto", f"/pedidos/{p2['id']}/enviar").status_code == 200
+    assert api.post("beto", f"/lineas/{burger['id']}/entregar").status_code == 422             # la cocina sigue siendo la cocina
+    r = api.post("beto", f"/lineas/{cola2['id']}/entregar")
     assert r.status_code == 200 and r.json()["estado"] == "entregada"
     db.expire_all()
-    assert antes - fisico() == 1                                       # el stock de la lata salió igual
+    assert antes - fisico() == 1
