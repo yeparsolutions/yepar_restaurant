@@ -323,6 +323,13 @@ function VistaPedido({ pedidoId, alVolver }: { pedidoId: string; alVolver: () =>
     setAviso(`Enviado a cocina (${enLibreta.length} plato${enLibreta.length === 1 ? "" : "s"}).${donde}`);
   };
 
+  const [traspaso, setTraspaso] = useState(false);
+  // Anular va a la libreta (funciona sin red); pasar la mesa necesita al servidor en el momento.
+  const anularPedido = () => {
+    if (!window.confirm("¿Anular este pedido? Solo se puede si no se envió ningún plato a cocina.")) return;
+    encolar("anular_pedido", { pedido_id: pedidoId });
+    alVolver();
+  };
   const pedirCuenta = () => {
     encolar("pedir_cuenta", { pedido_id: pedidoId });
     setError("");
@@ -384,8 +391,16 @@ function VistaPedido({ pedidoId, alVolver }: { pedidoId: string; alVolver: () =>
             <button disabled={ocupado || enLibreta.length === 0} onClick={enviar}>Enviar a cocina ({enLibreta.length})</button>
             <button className="secundario" disabled={ocupado || pedido.lineas.length === 0} onClick={pedirCuenta}>Pedir la cuenta</button>
           </div>
+        ) : pedido.estado === "cuenta_pedida" ? (
+          <Propina pedidoId={pedidoId} propinaActual={pedido.cuenta.propina} sinRed={!enLinea} alCambiar={recargar} />
         ) : (
           <p className="suave">Esta cuenta está en estado «{pedido.estado}».</p>
+        )}
+        {(abierto || pedido.estado === "cuenta_pedida") && (
+          <div className="acciones">
+            <button className="secundario" onClick={() => setTraspaso(true)}>Pasar mesa a otro mesero</button>
+            {abierto && <button className="secundario" disabled={pedido.lineas.some((l) => !["tomada", "cancelada"].includes(l.estado))} onClick={anularPedido}>Anular pedido</button>}
+          </div>
         )}
       </section>
 
@@ -412,10 +427,76 @@ function VistaPedido({ pedidoId, alVolver }: { pedidoId: string; alVolver: () =>
         </section>
       )}
 
+      {traspaso && (
+        <DialogoTraspaso
+          alCerrar={() => setTraspaso(false)}
+          alPasar={async (id) => { await pedir(`/pedidos/${pedidoId}/traspaso`, { json: { nuevo_mesero_id: id } }); setTraspaso(false); alVolver(); }}
+        />
+      )}
       {elegido && (
         <DialogoPlato plato={elegido} comensales={pedido.comensales} ocupado={ocupado} alCerrar={() => setElegido(null)} alAgregar={(d) => agregar(d, elegido)} />
       )}
     </div>
+  );
+}
+
+// ── Propina (la anota el mesero al pedir la cuenta) ─────────
+function Propina({ pedidoId, propinaActual, sinRed, alCambiar }: { pedidoId: string; propinaActual: string; sinRed: boolean; alCambiar: () => void }) {
+  const [otra, setOtra] = useState("");
+  const [pct, setPct] = useState<number | null>(null);
+  const [msg, setMsg] = useState<{ ok: boolean; texto: string } | null>(null);
+  useEffect(() => {
+    pedir<{ propina_sugerida_pct: string | number }>("/configuracion/cobro").then((c) => setPct(Number(c.propina_sugerida_pct))).catch(() => {});
+  }, []);
+  const anotar = async (monto: number | null) => {
+    setMsg(null);
+    try {
+      await pedir(`/pedidos/${pedidoId}/propina`, { json: monto === null ? {} : { monto: String(monto) } });
+      setMsg({ ok: true, texto: "Propina anotada." });
+      alCambiar();
+    } catch (e: any) {
+      setMsg({ ok: false, texto: e.message });
+    }
+  };
+  return (
+    <div className="bloque">
+      <p className="suave">La cuenta ya está pedida. Anota la propina que dejó el cliente (propina actual: <strong>{plata(propinaActual)}</strong>).</p>
+      {sinRed && <p className="aviso-offline">Sin conexión: la propina se anota cuando vuelva la red.</p>}
+      <div className="acciones">
+        <button disabled={sinRed} onClick={() => anotar(null)}>Sugerida{pct !== null ? ` (${pct}%)` : ""}</button>
+        <button className="secundario" disabled={sinRed} onClick={() => anotar(0)}>Sin propina</button>
+      </div>
+      <div className="en-linea">
+        <input type="number" inputMode="decimal" min="0" placeholder="Otro monto" aria-label="Otro monto de propina" value={otra} onChange={(e) => setOtra(e.target.value)} />
+        <button className="secundario" disabled={sinRed || !otra} onClick={() => anotar(Number(otra))}>Anotar</button>
+      </div>
+      {msg && <p className={msg.ok ? "exito" : "error"} role="status">{msg.texto}</p>}
+    </div>
+  );
+}
+
+// ── Pasar la mesa a otro mesero ─────────────────────────────
+function DialogoTraspaso({ alCerrar, alPasar }: { alCerrar: () => void; alPasar: (id: number) => Promise<void> }) {
+  const [meseros, setMeseros] = useState<{ id: number; nombre: string }[] | null>(null);
+  const [error, setError] = useState("");
+  useEffect(() => { pedir<{ id: number; nombre: string }[]>("/meseros").then(setMeseros).catch((e) => setError(e.message)); }, []);
+  const pasar = async (id: number) => {
+    setError("");
+    try { await alPasar(id); } catch (e: any) { setError(e.message); }
+  };
+  return (
+    <Dialogo titulo="Pasar la mesa a…" alCerrar={alCerrar}>
+      {error && <p className="error" role="alert">{error}</p>}
+      {!meseros ? <p className="suave">Cargando…</p> : meseros.length === 0 ? (
+        <p className="suave">No hay otros meseros activos en este local.</p>
+      ) : (
+        <ul className="insumos">
+          {meseros.map((m) => (
+            <li key={m.id}><span>{m.nombre}</span><button onClick={() => pasar(m.id)}>Pasar</button></li>
+          ))}
+        </ul>
+      )}
+    </Dialogo>
   );
 }
 

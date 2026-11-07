@@ -263,3 +263,12 @@ def test_el_cocinero_ve_los_insumos_y_marca_lo_que_se_acabo(api):
     r = api.get("chef", "/cocina/items").json()
     assert r[0]["nombre"] == "Carne" and r[0]["agotado"] is True      # los agotados van primero
     assert api.get("ana", "/cocina/items").status_code == 403           # el mesero no entra
+
+
+def test_el_mesero_ve_a_quien_puede_pasarle_una_mesa_y_se_la_pasa(api):
+    otros = api.get("ana", "/meseros").json()
+    assert [m["nombre"] for m in otros] == ["Beto"]                       # no se lista a sí misma ni a cocina/caja
+    pedido = abrir_mesa(api)
+    r = api.post("ana", f"/pedidos/{pedido['id']}/traspaso", {"nuevo_mesero_id": otros[0]["id"]})
+    assert r.status_code == 200 and r.json()["mesero_id"] == otros[0]["id"]
+    assert api.post("ana", f"/pedidos/{pedido['id']}/traspaso", {"nuevo_mesero_id": otros[0]["id"]}).status_code == 403   # ya no es suya
