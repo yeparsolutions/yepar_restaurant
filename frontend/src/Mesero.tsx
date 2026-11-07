@@ -26,6 +26,7 @@ type Falta = { nombre: string; agotado_manual?: boolean };
 type Plato = {
   item_id: number; nombre: string; categoria: string | null; precio_venta: string | null; foto_url: string | null;
   estacion: string; alcanza: boolean; faltas: Falta[]; removibles: Opcion[]; extras: Opcion[];
+  directo?: boolean;                         // bebida de reventa: no pasa por cocina, el mesero la entrega directo
 };
 type Linea = {
   pendiente?: boolean;                       // anotada en esta tablet, todavía sin confirmar por el servidor
@@ -322,6 +323,8 @@ function VistaPedido({ pedidoId, alVolver }: { pedidoId: string; alVolver: () =>
   };
 
   const [traspaso, setTraspaso] = useState(false);
+  // Las bebidas de reventa no las prepara nadie: desde que se envían el mesero ya puede entregarlas.
+  const esDirecto = (l: Linea) => carta.find((p) => p.item_id === l.item_id)?.directo === true;
   // Anular va a la libreta (funciona sin red); pasar la mesa necesita al servidor en el momento.
   const anularPedido = () => {
     if (!window.confirm("¿Anular este pedido? Solo se puede si no se envió ningún plato a cocina.")) return;
@@ -365,7 +368,7 @@ function VistaPedido({ pedidoId, alVolver }: { pedidoId: string; alVolver: () =>
             <li key={l.id} className={`linea ${l.estado}`}>
               <div>
                 <strong>{l.cantidad}× {l.nombre}</strong>{" "}
-                <span className={`estado ${l.estado}`}>{ETIQUETA_ESTADO[l.estado] ?? l.estado}</span>{l.pendiente && <span className="pendiente" title="Se enviará al volver la conexión"> ⏳</span>}
+                <span className={`estado ${esDirecto(l) && l.estado === "enviada" ? "lista" : l.estado}`}>{esDirecto(l) && l.estado === "enviada" ? "Por entregar" : (ETIQUETA_ESTADO[l.estado] ?? l.estado)}</span>{l.pendiente && <span className="pendiente" title="Se enviará al volver la conexión"> ⏳</span>}
                 <small className="suave">
                   {l.comensal ? `Persona ${l.comensal}` : ""}
                   {l.quitados.length ? ` · sin ${nombresDe(l.quitados, carta.find((p) => p.item_id === l.item_id)?.removibles ?? [])}` : ""}
@@ -375,7 +378,9 @@ function VistaPedido({ pedidoId, alVolver }: { pedidoId: string; alVolver: () =>
               </div>
               <span>{plata(l.total)}</span>
               {l.estado === "tomada" && <button className="secundario" disabled={ocupado} onClick={() => borrar(l)} aria-label={`Quitar ${l.nombre}`}>✕</button>}
-              {l.estado === "lista" && <button disabled={ocupado} onClick={() => entregar(l)}>Entregar</button>}
+              {(l.estado === "lista" || (esDirecto(l) && ["enviada", "en_preparacion"].includes(l.estado) && !l.pendiente)) && (
+                <button disabled={ocupado} onClick={() => entregar(l)}>Entregar</button>
+              )}
               {["enviada", "en_preparacion"].includes(l.estado) && <button className="secundario" disabled={ocupado} onClick={() => cancelar(l)}>Cancelar</button>}
             </li>
           ))}

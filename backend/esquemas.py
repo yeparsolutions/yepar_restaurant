@@ -165,6 +165,7 @@ class ItemCartaOut(BaseModel):
     item_id: int
     nombre: str
     categoria: Optional[str] = None
+    directo: bool = False                 # bebida de reventa: no pasa por cocina, el mesero la entrega directo
     removibles: list[OpcionCartaOut] = []
     extras: list[OpcionCartaOut] = []
     precio_venta: Optional[Dinero] = None
