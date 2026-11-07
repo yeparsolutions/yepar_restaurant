@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from database import get_db
-from esquemas import CorreoIn, LoginIn, TokenOut, UsuarioOut
+from esquemas import CorreoIn, EmpresaOut, LoginIn, TokenOut, UsuarioOut
 from models import Empresa, Usuario
 from errores import ErrorNoEncontrado
 from routers.comun import usuario_out
@@ -72,6 +72,13 @@ def poner_mi_correo(datos: CorreoIn, db: Session = Depends(get_db), usuario: Usu
     acceso.poner_correo(db, usuario, datos.email)
     db.commit()
     return usuario_out(usuario)
+
+
+@router.get("/empresa", response_model=EmpresaOut)
+def mi_empresa(db: Session = Depends(get_db), usuario: Usuario = Depends(usuario_actual)):
+    """Datos del restaurante que la pantalla necesita (hoy: la moneda con que se muestran los montos)."""
+    e = db.get(Empresa, usuario.empresa_id)
+    return EmpresaOut(nombre=e.nombre, moneda=e.moneda, pais=getattr(e, "pais", None))
 
 
 @router.get("/yo", response_model=UsuarioOut)
