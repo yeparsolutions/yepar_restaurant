@@ -104,6 +104,12 @@ class MesaIn(Entrada):
     sucursal_id: Optional[int] = None
 
 
+class MesaEditIn(Entrada):
+    nombre: Optional[str] = Field(default=None, min_length=1, max_length=40)
+    capacidad: Optional[int] = None
+    forma: Optional[str] = None
+
+
 class PosicionIn(Entrada):
     pos_x: int
     pos_y: int

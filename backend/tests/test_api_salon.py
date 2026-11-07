@@ -307,3 +307,21 @@ def test_sin_barman_el_mesero_busca_la_bebida_y_con_barman_sale_de_la_barra(api,
     assert r.status_code == 200 and r.json()["estado"] == "entregada"
     db.expire_all()
     assert antes - fisico() == 1
+
+
+def test_el_admin_renombra_y_quita_mesas(api):
+    mesa = api.post("admin", "/mesas", {"nombre": "Terraza 1", "capacidad": 4}).json()
+    r = api.como("admin", "patch", f"/mesas/{mesa['id']}", json={"nombre": "Terraza A", "capacidad": 6, "forma": "redonda"})
+    assert r.status_code == 200 and (r.json()["nombre"], r.json()["capacidad"], r.json()["forma"]) == ("Terraza A", 6, "redonda")
+    assert api.como("admin", "patch", f"/mesas/{mesa['id']}", json={"nombre": "Mesa 1"}).status_code == 422      # ya existe
+    assert api.como("ana", "patch", f"/mesas/{mesa['id']}", json={"nombre": "X"}).status_code == 403
+    # Una mesa que nunca se usó se borra del todo.
+    assert api.como("admin", "delete", f"/mesas/{mesa['id']}").status_code == 204
+    assert "Terraza A" not in [m["nombre"] for m in api.get("admin", "/mesas").json()]
+    # Una mesa con pedido abierto no se puede quitar; con historial se archiva y su nombre queda libre.
+    pedido = abrir_mesa(api, "m1")
+    assert api.como("admin", "delete", f"/mesas/{api.s['m1'].id}").status_code == 422
+    assert api.post("ana", f"/pedidos/{pedido['id']}/anular").status_code == 200
+    assert api.como("admin", "delete", f"/mesas/{api.s['m1'].id}").status_code == 204
+    assert "Mesa 1" not in [m["nombre"] for m in api.get("admin", "/mesas").json()]
+    assert api.post("admin", "/mesas", {"nombre": "Mesa 1"}).status_code == 201                                     # el nombre se reutiliza
