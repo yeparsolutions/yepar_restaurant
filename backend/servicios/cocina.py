@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session
 
 from errores import ErrorNegocio, ErrorNoEncontrado
 from models import (EstacionCocina, EstadoLinea, EstadoPedido, Extra, Item, LineaPedido, Pedido,
-                    RecetaLinea, RolUsuario, Usuario)
+                    RecetaLinea, RolUsuario, TipoItem, Usuario)
 from servicios.pedidos import cargar_linea
 from servicios.reservas import consumir_reserva
 from servicios.stock import cargar_item, obtener_stock, validar_sucursal
@@ -133,10 +133,19 @@ def marcar_lista(db: Session, *, empresa_id: int, linea_id: str, usuario_id: int
     return ResultadoListo(linea=linea, sin_stock=sin_stock)
 
 
-def marcar_entregada(db: Session, *, empresa_id: int, linea_id: str) -> LineaPedido:
-    """El mesero retiró el plato y lo llevó a la mesa: lista → entregada."""
+def marcar_entregada(db: Session, *, empresa_id: int, linea_id: str, usuario_id: Optional[int] = None) -> LineaPedido:
+    """
+    El mesero retiró el plato y lo llevó a la mesa: lista → entregada.
+
+    Las bebidas de reventa (una lata, una botella) no las prepara nadie: el mesero las entrega directo
+    desde 'enviada'. Ahí se cierra la reserva igual que si hubieran pasado por 'lista' (el stock sale).
+    """
     linea = cargar_linea(db, empresa_id, linea_id)
     _exigir_pedido_vivo(linea)
+    if linea.estado in (EstadoLinea.enviada, EstadoLinea.en_preparacion) and linea.item.tipo == TipoItem.vendible_reventa:
+        consumir_reserva(db, empresa_id=empresa_id, referencia_id=linea.id, usuario_id=usuario_id)
+        linea.estado = EstadoLinea.lista
+        linea.lista_en = _ahora()
     if linea.estado != EstadoLinea.lista:
         raise ErrorNegocio(f"El plato está '{linea.estado.value}': solo se entrega uno que ya está listo.")
     linea.estado = EstadoLinea.entregada

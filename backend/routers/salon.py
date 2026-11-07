@@ -17,7 +17,7 @@ from database import get_db
 from esquemas import (AbrirPedidoIn, EnvioOut, EstadoMesaOut, FaltanteOut, ItemCartaOut, LineaOut, MeseroOut, OpcionCartaOut,
                       MesaIn, MesaOut, PedidoOut, PosicionIn, RetiroOut, TomarLineaIn, TomarLineaOut,
                       TraspasoIn)
-from models import Extra, ExtraPlato, Item, RecetaLinea, RolUsuario, Usuario
+from models import Extra, ExtraPlato, Item, RecetaLinea, RolUsuario, TipoItem, Usuario
 from routers.comun import (disponibilidad_out, exigir_ser_el_mesero, linea_out, pedido_out)
 from seguridad import exigir_roles, resolver_sucursal, roles_de
 from servicios import cocina as svc_cocina
@@ -87,7 +87,7 @@ def carta(sucursal_id: Optional[int] = Query(default=None), db: Session = Depend
         ofrecidos = [OpcionCartaOut(id=e.id, nombre=e.nombre, precio=e.precio) for e in extras
                      if e.aplica_a_todos or item.id in por_plato.get(e.id, set())]
         resultado.append(ItemCartaOut(
-            categoria=item.categoria.nombre if item.categoria else None,
+            categoria=item.categoria.nombre if item.categoria else None, directo=item.tipo == TipoItem.vendible_reventa,
             removibles=removibles, extras=ofrecidos,
             item_id=item.id, nombre=item.nombre, precio_venta=item.precio_venta, foto_url=item.foto_url,
             estacion=item.estacion.value if item.estacion else "cocina", alcanza=base.alcanza, faltas=base.faltas))
@@ -207,6 +207,6 @@ def retiros(sucursal_id: Optional[int] = Query(default=None), db: Session = Depe
 @router.post("/lineas/{linea_id}/entregar", response_model=LineaOut)
 def entregar(linea_id: str, db: Session = Depends(get_db), usuario: Usuario = Depends(solo_mesero)):
     """El mesero retiró el plato y lo llevó a la mesa (cualquier mesero puede retirar por otro)."""
-    linea = svc_cocina.marcar_entregada(db, empresa_id=usuario.empresa_id, linea_id=linea_id)
+    linea = svc_cocina.marcar_entregada(db, empresa_id=usuario.empresa_id, linea_id=linea_id, usuario_id=usuario.id)
     db.commit()
     return linea_out(linea)
