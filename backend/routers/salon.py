@@ -17,7 +17,7 @@ from database import get_db
 from esquemas import (AbrirPedidoIn, EnvioOut, EstadoMesaOut, FaltanteOut, ItemCartaOut, LineaOut, MeseroOut, OpcionCartaOut,
                       MesaIn, MesaOut, PedidoOut, PosicionIn, RetiroOut, TomarLineaIn, TomarLineaOut,
                       TraspasoIn)
-from models import Extra, ExtraPlato, Item, RecetaLinea, RolUsuario, TipoItem, Usuario
+from models import Extra, ExtraPlato, Item, RecetaLinea, RolUsuario, Usuario
 from routers.comun import (disponibilidad_out, exigir_ser_el_mesero, linea_out, pedido_out)
 from seguridad import exigir_roles, resolver_sucursal, roles_de
 from servicios import cocina as svc_cocina
@@ -72,6 +72,9 @@ def carta(sucursal_id: Optional[int] = Query(default=None), db: Session = Depend
           usuario: Usuario = Depends(solo_mesero)):
     """Lo que ve el mesero: solo vendibles, cada uno con su semáforo (alcanza / qué falta)."""
     resultado = []
+    sucursal = resolver_sucursal(usuario, sucursal_id)
+    # Sin barman en el local, las bebidas las busca el mesero: se entregan directo.
+    hay_barra = svc_cocina.hay_personal_en(db, empresa_id=usuario.empresa_id, sucursal_id=sucursal, estacion="barra")
     extras = db.query(Extra).filter(Extra.empresa_id == usuario.empresa_id, Extra.activo.is_(True)).all()
     por_plato: dict[int, set[int]] = {}
     for ep in db.query(ExtraPlato).filter(ExtraPlato.extra_id.in_([e.id for e in extras] or [0])).all():
@@ -87,7 +90,7 @@ def carta(sucursal_id: Optional[int] = Query(default=None), db: Session = Depend
         ofrecidos = [OpcionCartaOut(id=e.id, nombre=e.nombre, precio=e.precio) for e in extras
                      if e.aplica_a_todos or item.id in por_plato.get(e.id, set())]
         resultado.append(ItemCartaOut(
-            categoria=item.categoria.nombre if item.categoria else None, directo=item.tipo == TipoItem.vendible_reventa,
+            categoria=item.categoria.nombre if item.categoria else None, directo=(item.estacion is not None and item.estacion.value == "barra" and not hay_barra),
             removibles=removibles, extras=ofrecidos,
             item_id=item.id, nombre=item.nombre, precio_venta=item.precio_venta, foto_url=item.foto_url,
             estacion=item.estacion.value if item.estacion else "cocina", alcanza=base.alcanza, faltas=base.faltas))
