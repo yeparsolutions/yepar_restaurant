@@ -162,3 +162,12 @@ def cabeceras():
     """cabeceras(usuario) → {'Authorization': 'Bearer ...'} con una sesión válida de esa persona."""
     from seguridad import crear_token
     return lambda usuario: {"Authorization": f"Bearer {crear_token(usuario)}"}
+
+
+@pytest.fixture(autouse=True)
+def _contadores_de_login_en_cero():
+    """Cada prueba parte sin intentos fallidos acumulados (el freno del login vive en memoria)."""
+    from servicios import limite_login
+    limite_login.reiniciar()
+    yield
+    limite_login.reiniciar()

@@ -6,7 +6,7 @@
 
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -15,7 +15,8 @@ from models import Empresa, Usuario
 from errores import ErrorNoEncontrado
 from routers.comun import usuario_out
 from seguridad import crear_token, usuario_actual, verificar_password
-from servicios import acceso
+from routers.registro import _direccion
+from servicios import acceso, limite_login
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -42,12 +43,24 @@ def _buscar_para_login(datos: LoginIn, db: Session) -> tuple[Optional[Usuario], 
     return db.query(Usuario).filter_by(empresa_id=empresa.id, username=(datos.username or "").strip()).one_or_none(), mensaje
 
 
+def _quien_intenta(datos: LoginIn) -> str:
+    """Identifica a la persona que se intenta suplantar (aunque no exista), para contar sus fallos."""
+    if datos.email:
+        return "correo:" + datos.email.strip().lower()
+    base = (datos.vinculo or "codigo:" + (datos.codigo_empresa or "").strip().upper())
+    return f"{base}|{(datos.username or '').strip().lower()}"
+
+
 @router.post("/login", response_model=TokenOut)
-def login(datos: LoginIn, db: Session = Depends(get_db)):
+def login(datos: LoginIn, request: Request, db: Session = Depends(get_db)):
+    persona, conexion = _quien_intenta(datos), _direccion(request)
+    limite_login.exigir_libre(persona, conexion)           # bloqueado: ni se mira la contraseña
     usuario, mensaje = _buscar_para_login(datos, db)
     correcto = verificar_password(datos.password, usuario.password_hash if usuario else _HASH_FALSO)
     if usuario is None or not correcto or not usuario.activo:
+        limite_login.anotar_fallo(persona, conexion)
         raise HTTPException(status_code=401, detail=mensaje)
+    limite_login.anotar_exito(persona, conexion)
     return TokenOut(access_token=crear_token(usuario), usuario=usuario_out(usuario))
 
 
