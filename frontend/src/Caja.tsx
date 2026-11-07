@@ -6,9 +6,13 @@
 // transferencia, total o por partes) y al terminar el turno cuenta el cajón: debe calzar con lo cobrado.
 // ============================================================
 import { useCallback, useEffect, useState } from "react";
-import { pedir, type Sesion } from "./api";
+import { ErrorApi, pedir, type Sesion } from "./api";
 import { Marca } from "./App";
 import { Dialogo, nuevoId, plata } from "./Mesero";
+import { guardarCache, leerCache } from "./sinConexion";
+import {
+  anotarPago, descartarRechazados, colaActual, enviarPagos, fijarCajero, iniciarPagos, pendienteDeEnvio, usePagosSinConexion,
+} from "./pagosSinConexion";
 
 type Turno = { id: number; caja: string; fondo: string; abierto_en: string | null };
 type CajaT = { id: number; nombre: string };
@@ -24,19 +28,36 @@ type Arqueo = { fondo: string; efectivo_cobrado: string; esperado: string; canti
 
 const num = (v: string | number | null | undefined) => Number(v ?? 0);
 
+/** La cuenta del servidor con los cobros aún sin enviar ya descontados (y cerrada si quedó en cero). */
+function vistaConCobros(p: Pedido, cobrado: number): Pedido {
+  const pendiente = Math.max(num(p.cuenta.pendiente) - cobrado, 0);
+  return {
+    ...p,
+    estado: pendiente === 0 ? "cerrado" : p.estado,
+    cuenta: { ...p.cuenta, pagado: String(num(p.cuenta.pagado) + cobrado), pendiente: String(pendiente) },
+  };
+}
+
 export default function Caja({ sesion, alSalir }: { sesion: Sesion; alSalir: () => void }) {
   const [turno, setTurno] = useState<Turno | null | undefined>(undefined); // undefined = cargando
   const [error, setError] = useState("");
   const [cerrando, setCerrando] = useState(false);
   const [vista, setVista] = useState<"cobrar" | "propinas">("cobrar");
   const [pedidoId, setPedidoId] = useState<string | null>(null);
+  useState(() => fijarCajero(sesion.usuario.id));            // la copia local ya está disponible en la primera pantalla
+  useEffect(() => { iniciarPagos(sesion.usuario.id); }, [sesion.usuario.id]);
+  const { cola } = usePagosSinConexion();
 
   const cargarTurno = useCallback(async () => {
     try {
-      setTurno(await pedir<Turno>("/turnos/actual"));
+      const t = await pedir<Turno>("/turnos/actual");
+      guardarCache("turno", t);
+      setTurno(t);
     } catch (e: any) {
       // 404 = no hay turno abierto: es un estado normal, no un error.
-      if (e.estado === 404) setTurno(null);
+      if (e.estado === 404) { guardarCache("turno", null); setTurno(null); }
+      // Sin red: se sigue con el turno que ya estaba abierto en esta caja.
+      else if (e.estado === 0 && leerCache<Turno>("turno")) setTurno(leerCache<Turno>("turno"));
       else { setError(e.message); setTurno(null); }
     }
   }, []);
@@ -48,9 +69,15 @@ export default function Caja({ sesion, alSalir }: { sesion: Sesion; alSalir: () 
         <Marca />
         <span className="suave">Caja · {sesion.usuario.nombre}{turno ? ` · ${turno.caja}` : ""}</span>
         <span style={{ flex: 1 }} />
-        {turno && <button className="secundario" onClick={() => setCerrando(true)}>Cerrar turno</button>}
+        {turno && (
+          <button className="secundario" onClick={() => setCerrando(true)} disabled={cola.length > 0}
+            title={cola.length > 0 ? "Hay cobros por enviar: espera a que se envíen para contar el cajón." : undefined}>
+            Cerrar turno
+          </button>
+        )}
         <button className="secundario" onClick={alSalir}>Salir</button>
       </header>
+      <AvisoPagos />
       <main className="contenido">
         {error && <p className="error" role="alert">{error}</p>}
         {turno === undefined ? <p className="suave">Cargando…</p> : turno === null ? (
@@ -69,6 +96,30 @@ export default function Caja({ sesion, alSalir }: { sesion: Sesion; alSalir: () 
       </main>
       {cerrando && turno && <CerrarTurno turno={turno} alCerrar={() => setCerrando(false)} alTerminar={() => { setCerrando(false); setTurno(null); }} />}
     </>
+  );
+}
+
+/** Franja de estado: cobros anotados sin enviar y cobros que el servidor no aceptó. */
+function AvisoPagos() {
+  const { cola, rechazados, enviando } = usePagosSinConexion();
+  if (cola.length === 0 && rechazados.length === 0) return null;
+  return (
+    <div className="franja-conexion">
+      {cola.length > 0 && (
+        <p className="aviso-offline" role="status">
+          {enviando ? "Enviando cobros…" : `${cola.length} cobro${cola.length === 1 ? "" : "s"} guardado${cola.length === 1 ? "" : "s"} en la caja, por enviar`}{" "}
+          <button className="secundario" onClick={() => enviarPagos()}>Reintentar</button>
+        </p>
+      )}
+      {rechazados.length > 0 && (
+        <div className="error" role="alert">
+          <strong>El servidor no aceptó {rechazados.length === 1 ? "un cobro" : `${rechazados.length} cobros`}.</strong>{" "}
+          El dinero ya lo recibiste: avisa al administrador para registrarlo.
+          <ul>{rechazados.map((r) => <li key={r.pago_id}>{r.mesa ?? "Cuenta"} · {plata(r.monto)} — {r.error}</li>)}</ul>
+          <button className="secundario" onClick={descartarRechazados}>Entendido</button>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -110,11 +161,24 @@ function AbrirTurno({ alAbrir }: { alAbrir: (t: Turno) => void }) {
 
 // ── Cuentas por cobrar ──────────────────────────────────────
 function PorCobrar({ alAbrir }: { alAbrir: (pedidoId: string) => void }) {
-  const [mesas, setMesas] = useState<Mesa[] | null>(null);
+  const [mesas, setMesas] = useState<Mesa[] | null>(() => leerCache<Mesa[]>("mesas"));
   const [error, setError] = useState("");
   const [todas, setTodas] = useState(false);
+  const { cola } = usePagosSinConexion();
   const cargar = useCallback(async () => {
-    try { setMesas(await pedir<Mesa[]>("/mesas")); setError(""); } catch (e: any) { setError(e.message); }
+    try {
+      const m = await pedir<Mesa[]>("/mesas");
+      guardarCache("mesas", m);
+      setMesas(m);
+      setError("");
+      // Se guarda cada cuenta pedida para poder cobrarla aunque se caiga la red antes de abrirla.
+      m.filter((x) => x.pedido_id && x.estado === "cuenta_pedida").forEach((x) => {
+        pedir<Pedido>(`/pedidos/${x.pedido_id}`).then((p) => guardarCache("caja_pedido_" + x.pedido_id, p)).catch(() => {});
+      });
+    } catch (e: any) {
+      // Sin red se muestra la última lista que se vio.
+      setError(e instanceof ErrorApi && e.estado === 0 ? "Sin conexión: mostrando la última lista." : e.message);
+    }
   }, []);
   useEffect(() => {
     cargar();
@@ -141,7 +205,9 @@ function PorCobrar({ alAbrir }: { alAbrir: (pedidoId: string) => void }) {
           {conCuenta.map((m) => (
             <button key={m.mesa_id} className={`plato ${m.estado === "cuenta_pedida" ? "falta" : ""}`} onClick={() => alAbrir(m.pedido_id!)}>
               <strong>{m.nombre}</strong>
-              <small>{m.estado === "cuenta_pedida" ? "Pidió la cuenta" : "Abierta"}</small>
+              <small>
+                {cola.some((p) => p.pedido_id === m.pedido_id) ? "Cobro por enviar" : m.estado === "cuenta_pedida" ? "Pidió la cuenta" : "Abierta"}
+              </small>
             </button>
           ))}
         </div>
@@ -152,9 +218,13 @@ function PorCobrar({ alAbrir }: { alAbrir: (pedidoId: string) => void }) {
 
 // ── Cobrar una cuenta ───────────────────────────────────────
 function Cobro({ pedidoId, alVolver }: { pedidoId: string; alVolver: () => void }) {
-  const [pedido, setPedido] = useState<Pedido | null>(null);
-  const [terminales, setTerminales] = useState<Terminal[]>([]);
+  const [servidor, setPedido] = useState<Pedido | null>(() => leerCache<Pedido>("caja_pedido_" + pedidoId));
+  const [terminales, setTerminales] = useState<Terminal[]>(() => leerCache<Terminal[]>("terminales") ?? []);
   const [pctSugerido, setPctSugerido] = useState<number>(10);
+  const { cola } = usePagosSinConexion();
+  const enviadosLocal = pendienteDeEnvio(pedidoId, cola);
+  // La cuenta que se muestra = la del servidor menos lo ya cobrado que aún no viajó.
+  const pedido = servidor && enviadosLocal > 0 ? vistaConCobros(servidor, enviadosLocal) : servidor;
   const [error, setError] = useState("");
   const [aviso, setAviso] = useState("");
   const [ocupado, setOcupado] = useState(false);
@@ -171,13 +241,20 @@ function Cobro({ pedidoId, alVolver }: { pedidoId: string; alVolver: () => void 
   const recargar = useCallback(async () => {
     try {
       const p = await pedir<Pedido>(`/pedidos/${pedidoId}`);
+      guardarCache("caja_pedido_" + pedidoId, p);
       setPedido(p);
-      setMonto((m) => (m === "" ? p.cuenta.pendiente : m));
-    } catch (e: any) { setError(e.message); }
+      setMonto((m) => (m === "" ? String(Math.max(num(p.cuenta.pendiente) - pendienteDeEnvio(pedidoId, colaActual()), 0)) : m));
+    } catch (e: any) {
+      if (!(e instanceof ErrorApi && e.estado === 0)) { setError(e.message); return; }
+      // Sin red: el monto sugerido sale de la última cuenta vista menos lo ya cobrado sin enviar.
+      const ultima = leerCache<Pedido>("caja_pedido_" + pedidoId);
+      if (ultima) setMonto((m) => (m === "" ? String(Math.max(num(ultima.cuenta.pendiente) - pendienteDeEnvio(pedidoId, colaActual()), 0)) : m));
+    }
   }, [pedidoId]);
   useEffect(() => {
     recargar();
-    pedir<Terminal[]>("/terminales").then((t) => { setTerminales(t); setTerminalId(String(t[0]?.id ?? "")); }).catch(() => {});
+    setTerminalId(String(leerCache<Terminal[]>("terminales")?.[0]?.id ?? ""));
+    pedir<Terminal[]>("/terminales").then((t) => { guardarCache("terminales", t); setTerminales(t); setTerminalId(String(t[0]?.id ?? "")); }).catch(() => {});
     pedir<{ propina_sugerida_pct: string | number }>("/configuracion/cobro").then((c) => setPctSugerido(num(c.propina_sugerida_pct))).catch(() => {});
   }, [recargar]);
 
@@ -202,16 +279,28 @@ function Cobro({ pedidoId, alVolver }: { pedidoId: string; alVolver: () => void 
   };
   const cobrar = (ev: React.FormEvent) => {
     ev.preventDefault();
+    // Se valida aquí lo que el servidor validaría, porque sin red nadie lo revisa antes de entregar el recibo.
+    if (num(monto) <= 0) { setError("El monto debe ser mayor que cero."); return; }
+    if (pedido && num(monto) > num(pedido.cuenta.pendiente)) { setError("El monto supera lo pendiente de la cuenta."); return; }
+    if (medio === "efectivo" && recibido && num(recibido) < num(monto)) { setError("Lo recibido no alcanza para el monto a cobrar."); return; }
+    const cuerpo = {
+      medio, monto, pago_id: nuevoId(),
+      recibido: medio === "efectivo" && recibido ? recibido : null,
+      numero_operacion: medio !== "efectivo" ? operacion.trim() : null,
+      terminal_id: medio === "tarjeta" ? Number(terminalId) : null,
+    };
     hacer(async () => {
-      const r = await pedir<Pago>(`/pedidos/${pedidoId}/pagos`, {
-        json: {
-          medio, monto, pago_id: nuevoId(),
-          recibido: medio === "efectivo" && recibido ? recibido : null,
-          numero_operacion: medio !== "efectivo" ? operacion.trim() : null,
-          terminal_id: medio === "tarjeta" ? Number(terminalId) : null,
-        },
-      });
-      setUltimo(r); setRecibido(""); setOperacion("");
+      try {
+        const r = await pedir<Pago>(`/pedidos/${pedidoId}/pagos`, { json: cuerpo });
+        setUltimo(r);
+      } catch (e) {
+        // Sin red: el cobro se anota en la caja con su número único y viaja solo cuando vuelva la red.
+        if (!(e instanceof ErrorApi && e.estado === 0)) throw e;
+        anotarPago({ pago_id: cuerpo.pago_id, pedido_id: pedidoId, mesa: pedido?.mesa ?? null, medio, monto, json: cuerpo });
+        setUltimo({ vuelto: medio === "efectivo" && recibido ? String(num(recibido) - num(monto)) : null, pedido_estado: "", documento_estado: null, documento_folio: null, cuenta: pedido!.cuenta });
+        setAviso("Sin conexión: cobro guardado en la caja. Se enviará solo al volver la red.");
+      }
+      setRecibido(""); setOperacion("");
     });
   };
 
@@ -248,6 +337,7 @@ function Cobro({ pedidoId, alVolver }: { pedidoId: string; alVolver: () => void 
         {cerrada ? (
           <div className="resultado ok" role="status">
             <h2 style={{ marginTop: 0 }}>Cuenta cerrada ✓</h2>
+            {enviadosLocal > 0 && <p className="aviso-offline">Cobro guardado en la caja: se envía solo al volver la red.</p>}
             {ultimo?.vuelto && num(ultimo.vuelto) > 0 && <p>Vuelto a entregar: <strong>{plata(ultimo.vuelto)}</strong></p>}
             {ultimo?.documento_estado && <p>Boleta/factura: {ultimo.documento_estado}{ultimo.documento_folio ? ` · folio ${ultimo.documento_folio}` : ""}</p>}
             <button onClick={alVolver}>Siguiente cuenta</button>
