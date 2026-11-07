@@ -14,12 +14,12 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from database import get_db
-from esquemas import (AbrirPedidoIn, EnvioOut, EstadoMesaOut, FaltanteOut, ItemCartaOut, LineaOut, OpcionCartaOut,
+from esquemas import (AbrirPedidoIn, EnvioOut, EstadoMesaOut, FaltanteOut, ItemCartaOut, LineaOut, MeseroOut, OpcionCartaOut,
                       MesaIn, MesaOut, PedidoOut, PosicionIn, RetiroOut, TomarLineaIn, TomarLineaOut,
                       TraspasoIn)
 from models import Extra, ExtraPlato, Item, RecetaLinea, RolUsuario, Usuario
 from routers.comun import (disponibilidad_out, exigir_ser_el_mesero, linea_out, pedido_out)
-from seguridad import exigir_roles, resolver_sucursal
+from seguridad import exigir_roles, resolver_sucursal, roles_de
 from servicios import cocina as svc_cocina
 from servicios import mesas as svc_mesas
 from servicios import pedidos as svc_pedidos
@@ -159,6 +159,17 @@ def pedir_cuenta(pedido_id: str, db: Session = Depends(get_db), usuario: Usuario
     svc_pedidos.pedir_cuenta(db, empresa_id=usuario.empresa_id, pedido_id=pedido.id)
     db.commit()
     return pedido_out(db, pedido)
+
+
+@router.get("/meseros", response_model=list[MeseroOut])
+def meseros(sucursal_id: Optional[int] = Query(default=None), db: Session = Depends(get_db),
+            usuario: Usuario = Depends(solo_personal_de_sala)):
+    """Los otros meseros activos del local: a quién se le puede pasar una mesa."""
+    sucursal = resolver_sucursal(usuario, sucursal_id)
+    gente = db.query(Usuario).filter(Usuario.empresa_id == usuario.empresa_id, Usuario.activo.is_(True),
+                                     Usuario.id != usuario.id).order_by(Usuario.nombre).all()
+    return [MeseroOut(id=u.id, nombre=u.nombre) for u in gente
+            if RolUsuario.mesero in roles_de(u) and u.sucursal_id in (None, sucursal)]
 
 
 @router.post("/pedidos/{pedido_id}/traspaso", response_model=PedidoOut)

@@ -186,6 +186,11 @@ class TomarLineaIn(Entrada):
     linea_id: Optional[str] = Field(default=None, max_length=36)
 
 
+class MeseroOut(BaseModel):
+    id: int
+    nombre: str
+
+
 class TraspasoIn(Entrada):
     nuevo_mesero_id: int
 
