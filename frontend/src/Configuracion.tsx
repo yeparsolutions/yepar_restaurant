@@ -74,7 +74,61 @@ function Mesas({ local }: { local: number }) {
       {error && <p className="error" role="alert">{error}</p>}
       <Plano mesas={mesas} alMover={cargar} alFallar={setError} />
       <NuevasMesas existentes={mesas} crear={crear} alTerminar={cargar} alFallar={setError} />
+      <EditarMesas mesas={mesas} alCambiar={cargar} alFallar={setError} />
     </div>
+  );
+}
+
+// ── Cambiar nombre, personas o forma de una mesa, o quitarla ──
+function EditarMesas({ mesas, alCambiar, alFallar }: { mesas: Mesa[]; alCambiar: () => void; alFallar: (m: string) => void }) {
+  if (mesas.length === 0) return null;
+  return (
+    <div className="formulario">
+      <h3>Editar mesas</h3>
+      <ul className="lista">
+        {mesas.map((m) => <FilaMesa key={m.mesa_id} mesa={m} alCambiar={alCambiar} alFallar={alFallar} />)}
+      </ul>
+    </div>
+  );
+}
+
+function FilaMesa({ mesa, alCambiar, alFallar }: { mesa: Mesa; alCambiar: () => void; alFallar: (m: string) => void }) {
+  const [nombre, setNombre] = useState(mesa.nombre);
+  const [capacidad, setCapacidad] = useState(mesa.capacidad);
+  const [forma, setForma] = useState(mesa.forma);
+  const cambiado = nombre !== mesa.nombre || capacidad !== mesa.capacidad || forma !== mesa.forma;
+
+  async function guardar() {
+    alFallar("");
+    try {
+      await pedir(`/mesas/${mesa.mesa_id}`, { metodo: "PATCH", json: { nombre, capacidad, forma } });
+      alCambiar();
+    } catch (e) {
+      alFallar((e as Error).message);
+    }
+  }
+  async function quitar() {
+    if (!confirm(`¿Quitar «${mesa.nombre}» del plano? Sus cuentas pasadas no se pierden.`)) return;
+    alFallar("");
+    try {
+      await pedir(`/mesas/${mesa.mesa_id}`, { metodo: "DELETE" });
+      alCambiar();
+    } catch (e) {
+      alFallar((e as Error).message);
+    }
+  }
+  return (
+    <li className="fila-mesa">
+      <input value={nombre} onChange={(e) => setNombre(e.target.value)} aria-label={`Nombre de ${mesa.nombre}`} maxLength={40} />
+      <input type="number" min={1} max={30} value={capacidad} onChange={(e) => setCapacidad(Number(e.target.value))} aria-label={`Personas de ${mesa.nombre}`} style={{ maxWidth: 80 }} />
+      <select value={forma} onChange={(e) => setForma(e.target.value)} aria-label={`Forma de ${mesa.nombre}`} style={{ maxWidth: 150 }}>
+        <option value="cuadrada">Cuadrada</option>
+        <option value="redonda">Redonda</option>
+        <option value="rectangular">Rectangular</option>
+      </select>
+      {cambiado && <button onClick={guardar}>Guardar</button>}
+      <button className="secundario" onClick={quitar}>Quitar</button>
+    </li>
   );
 }
 

@@ -245,3 +245,8 @@ legend { font-weight: 600; font-size: 0.875rem; padding: 0; margin-bottom: 4px; 
 .aviso-cola button { min-height: 32px; padding: 0 12px; }
 .franja-conexion ul { margin: 4px 0 8px; padding-left: 20px; }
 .pendiente { opacity: 0.8; }
+
+/* Editar mesas */
+.fila-mesa { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.fila-mesa input:first-child { flex: 1; min-width: 140px; }
+.fila-mesa input, .fila-mesa select { width: auto; }

@@ -10,11 +10,11 @@
 
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.orm import Session
 
 from database import get_db
-from esquemas import (AbrirPedidoIn, EnvioOut, EstadoMesaOut, FaltanteOut, ItemCartaOut, LineaOut, MeseroOut, OpcionCartaOut,
+from esquemas import (AbrirPedidoIn, EnvioOut, EstadoMesaOut, MesaEditIn, FaltanteOut, ItemCartaOut, LineaOut, MeseroOut, OpcionCartaOut,
                       MesaIn, MesaOut, PedidoOut, PosicionIn, RetiroOut, TomarLineaIn, TomarLineaOut,
                       TraspasoIn)
 from models import Extra, ExtraPlato, Item, RecetaLinea, RolUsuario, Usuario
@@ -49,6 +49,21 @@ def crear_mesa(datos: MesaIn, db: Session = Depends(get_db), usuario: Usuario = 
                                 sucursal_id=resolver_sucursal(usuario, datos.sucursal_id), **campos)
     db.commit()
     return MesaOut.model_validate(mesa, from_attributes=True)
+
+
+@router.patch("/mesas/{mesa_id}", response_model=MesaOut)
+def editar_mesa(mesa_id: int, datos: MesaEditIn, db: Session = Depends(get_db), usuario: Usuario = Depends(solo_admin)):
+    mesa = svc_mesas.editar_mesa(db, empresa_id=usuario.empresa_id, mesa_id=mesa_id, **datos.model_dump())
+    db.commit()
+    return MesaOut.model_validate(mesa, from_attributes=True)
+
+
+@router.delete("/mesas/{mesa_id}", status_code=204)
+def quitar_mesa(mesa_id: int, db: Session = Depends(get_db), usuario: Usuario = Depends(solo_admin)):
+    """Borra la mesa (o la archiva si ya tuvo pedidos). No se puede con un pedido abierto."""
+    svc_mesas.quitar_mesa(db, empresa_id=usuario.empresa_id, mesa_id=mesa_id)
+    db.commit()
+    return Response(status_code=204)
 
 
 @router.patch("/mesas/{mesa_id}/posicion", response_model=MesaOut)

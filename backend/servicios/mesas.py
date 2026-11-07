@@ -61,6 +61,48 @@ def crear_mesa(db: Session, *, empresa_id: int, sucursal_id: int, nombre: str, c
     return mesa
 
 
+def editar_mesa(db: Session, *, empresa_id: int, mesa_id: int, nombre: Optional[str] = None,
+                capacidad: Optional[int] = None, forma: Optional[str] = None) -> Mesa:
+    """El administrador cambia el nombre, la capacidad o la forma de una mesa."""
+    mesa = cargar_mesa(db, empresa_id, mesa_id)
+    if nombre is not None:
+        nombre = nombre.strip()
+        if not nombre:
+            raise ErrorNegocio("La mesa necesita un nombre.")
+        otra = db.query(Mesa).filter(Mesa.sucursal_id == mesa.sucursal_id, Mesa.nombre == nombre, Mesa.id != mesa.id).first()
+        if otra is not None:
+            raise ErrorNegocio(f"Ya existe una mesa llamada '{nombre}' en este local.")
+        mesa.nombre = nombre
+    if capacidad is not None:
+        if capacidad <= 0:
+            raise ErrorNegocio("La capacidad de la mesa debe ser mayor que cero.")
+        mesa.capacidad = capacidad
+    if forma is not None:
+        if forma not in FORMAS:
+            raise ErrorNegocio(f"Forma de mesa inválida: elige entre {', '.join(FORMAS)}.")
+        mesa.forma = forma
+    db.flush()
+    return mesa
+
+
+def quitar_mesa(db: Session, *, empresa_id: int, mesa_id: int) -> None:
+    """
+    Quita una mesa del plano. Si nunca se usó, se borra; si tiene historial de pedidos se archiva
+    (deja de verse, pero sus cuentas pasadas siguen intactas) y su nombre queda libre para otra mesa.
+    No se puede quitar con un pedido abierto.
+    """
+    mesa = cargar_mesa(db, empresa_id, mesa_id)
+    abierto = db.query(Pedido).filter(Pedido.mesa_id == mesa.id, Pedido.estado.in_((EstadoPedido.abierto, EstadoPedido.cuenta_pedida))).first()
+    if abierto is not None:
+        raise ErrorNegocio(f"'{mesa.nombre}' tiene un pedido abierto: ciérralo o anúlalo primero.")
+    if db.query(Pedido).filter(Pedido.mesa_id == mesa.id).first() is None:
+        db.delete(mesa)
+    else:
+        mesa.activa = False
+        mesa.nombre = f"{mesa.nombre[:24]} (archivada {mesa.id})"[:40]
+    db.flush()
+
+
 def cargar_mesa(db: Session, empresa_id: int, mesa_id: int) -> Mesa:
     """Una mesa de ESTE cliente; si es de otro, responde 'no existe'."""
     mesa = db.get(Mesa, mesa_id)
