@@ -229,3 +229,19 @@ legend { font-weight: 600; font-size: 0.875rem; padding: 0; margin-bottom: 4px; 
 .insumos li { display: flex; justify-content: space-between; align-items: center; gap: 8px; border: 1px solid var(--borde); border-radius: 10px; padding: 6px 10px; }
 /* En oscuro, el logo completo (texto gris) va sobre una placa blanca para que se lea */
 @media (prefers-color-scheme: dark) { .marca-grande img { background: #fff; border-radius: 12px; padding: 10px 14px; } }
+
+/* Caja */
+.pestanas { display: flex; gap: 4px; margin-bottom: 8px; }
+.cuenta { display: grid; gap: 4px; margin: 16px 0; }
+.cuenta > div { display: flex; justify-content: space-between; gap: 12px; }
+.cuenta dt, .cuenta dd { margin: 0; }
+.cuenta .total { font-size: 1.2rem; font-weight: 700; border-top: 1px solid var(--borde); padding-top: 4px; }
+
+/* Sin conexión */
+.franja-conexion { display: grid; gap: 6px; padding: 8px 16px 0; max-width: 960px; margin: 0 auto; }
+.franja-conexion p, .franja-conexion .error { margin: 0; }
+.aviso-offline { background: var(--violeta-suave); color: var(--violeta-fuerte); padding: 8px 12px; border-radius: 8px; font-weight: 600; }
+.aviso-cola { display: flex; align-items: center; gap: 10px; color: var(--suave); }
+.aviso-cola button { min-height: 32px; padding: 0 12px; }
+.franja-conexion ul { margin: 4px 0 8px; padding-left: 20px; }
+.pendiente { opacity: 0.8; }

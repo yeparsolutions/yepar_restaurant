@@ -274,3 +274,14 @@ def test_un_restaurante_no_toca_la_caja_de_otro(db, api, otro_local, nuevo_usuar
     assert cliente.post(f"/pedidos/{pedido['id']}/descuento", json={"porcentaje": "5"}, headers=cab).status_code in (403, 404)
     assert cliente.get(f"/cierre/terminal/{api.s['terminal'].id}", headers=cab,
                        params={"desde": "2026-01-01T00:00:00+00:00", "hasta": "2027-01-01T00:00:00+00:00"}).status_code == 404
+
+
+def test_un_local_sin_caja_ni_terminal_recibe_los_de_partida(db, api, nuevo_usuario, cabeceras, cliente):
+    from models import Sucursal
+    e = api.s["empresa"]
+    local = Sucursal(empresa_id=e.id, nombre="Local nuevo"); db.add(local); db.flush()
+    cajera = nuevo_usuario(e, "Nueva", roles=(RolUsuario.cajero,)); cajera.sucursal_id = local.id; db.commit()
+    h = cabeceras(cajera)
+    assert [c["nombre"] for c in cliente.get("/cajas", headers=h).json()] == ["Caja 1"]
+    assert [c["nombre"] for c in cliente.get("/cajas", headers=h).json()] == ["Caja 1"]      # no se duplica
+    assert [t["nombre"] for t in cliente.get("/terminales", headers=h).json()] == ["Terminal 1"]

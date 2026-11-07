@@ -5,8 +5,14 @@
 // cuando toca "Enviar a cocina" las hojas viajan a la cocina; antes de eso se pueden tachar sin costo.
 // ============================================================
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { pedir, type Sesion } from "./api";
+import { ErrorApi, pedir, type Sesion } from "./api";
 import { Marca } from "./App";
+import {
+  descartarRechazadas, descartarSiNoSalio, encolar, fijarUsuario, guardarCache, iniciarSinConexion, leerCache, nuevoId, useSinConexion,
+  vaciarCola, type Operacion,
+} from "./sinConexion";
+
+export { nuevoId };
 
 // ── Tipos que devuelve la API ───────────────────────────────
 type EstadoMesa = "libre" | "ocupada" | "lista" | "cuenta_pedida";
@@ -21,6 +27,7 @@ type Plato = {
   estacion: string; alcanza: boolean; faltas: Falta[]; removibles: Opcion[]; extras: Opcion[];
 };
 type Linea = {
+  pendiente?: boolean;                       // anotada en esta tablet, todavía sin confirmar por el servidor
   id: string; item_id: number; nombre: string; cantidad: number; precio_unitario: string; comensal: number | null;
   nota: string | null; estado: string; estacion: string; quitados: number[]; extras: number[]; total: string;
 };
@@ -32,16 +39,103 @@ const ETIQUETA_ESTADO: Record<string, string> = {
 };
 const ESTADOS_MESA: Record<EstadoMesa, string> = { libre: "Libre", ocupada: "Ocupada", lista: "Plato listo", cuenta_pedida: "Pidió la cuenta" };
 
-const plata = (v: string | number | null | undefined) => {
+export const plata = (v: string | number | null | undefined) => {
   const n = Number(v ?? 0);
   return "$" + n.toLocaleString("es-CL", { maximumFractionDigits: 2 });
 };
-const nuevoId = () => (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`);
 // La API entrega ids de lo quitado/agregado; los nombres salen de la carta.
 const nombresDe = (ids: number[], opciones: Opcion[]) => ids.map((i) => opciones.find((o) => o.id === i)?.nombre ?? "…").join(", ");
 
+// ── Lo anotado sin confirmar se muestra encima de lo que sabe el servidor ──
+const CEROS: Cuenta = { subtotal: "0", descuento: "0", propina: "0", total: "0", pagado: "0", pendiente: "0" };
+
+/** El pedido tal como lo ve el mesero: la última copia del servidor + las operaciones que aún no se sincronizaron. */
+function pedidoConPendientes(base: Pedido | null, ops: Operacion[], id: string, carta: Plato[], mesas: Mesa[]): Pedido | null {
+  let p: Pedido | null = base ? structuredClone(base) : null;
+  let tocado = false;
+  for (const o of ops) {
+    const d = o.datos as Record<string, any>;
+    if (o.tipo === "abrir_pedido" && d.pedido_id === id && !p) {
+      p = { id, mesa: mesas.find((m) => m.mesa_id === d.mesa_id)?.nombre ?? null, estado: "abierto", comensales: d.comensales ?? null, lineas: [], cuenta: { ...CEROS } };
+      tocado = true;
+    } else if (!p) {
+      continue;
+    } else if (o.tipo === "tomar_linea" && d.pedido_id === id) {
+      const plato = carta.find((x) => x.item_id === d.item_id);
+      const extras = (d.extra_ids as number[] ?? []).map((e) => plato?.extras.find((x) => x.id === e));
+      const unit = Number(plato?.precio_venta ?? 0);
+      const total = (unit + extras.reduce((t, e) => t + Number(e?.precio ?? 0), 0)) * d.cantidad;
+      p.lineas.push({
+        id: d.linea_id, item_id: d.item_id, nombre: plato?.nombre ?? "Plato", cantidad: d.cantidad, precio_unitario: String(unit),
+        comensal: d.comensal ?? null, nota: d.nota ?? null, estado: "tomada", estacion: plato?.estacion ?? "cocina",
+        quitados: d.sin_ingredientes ?? [], extras: d.extra_ids ?? [], total: String(total), pendiente: true,
+      });
+      tocado = true;
+    } else if (o.tipo === "quitar_linea") {
+      const antes = p.lineas.length;
+      p.lineas = p.lineas.filter((l) => l.id !== d.linea_id);
+      tocado = tocado || p.lineas.length !== antes;
+    } else if (o.tipo === "enviar" && d.pedido_id === id) {
+      p.lineas.forEach((l) => { if (l.estado === "tomada") { l.estado = "enviada"; l.pendiente = true; } });
+      tocado = true;
+    } else if (o.tipo === "cancelar_linea") {
+      p.lineas.forEach((l) => { if (l.id === d.linea_id) { l.estado = "cancelada"; l.pendiente = true; } });
+      tocado = true;
+    } else if (o.tipo === "pedir_cuenta" && d.pedido_id === id) {
+      p.estado = "cuenta_pedida"; tocado = true;
+    } else if (o.tipo === "anular_pedido" && d.pedido_id === id) {
+      p.estado = "anulado"; tocado = true;
+    }
+  }
+  if (p && tocado) {
+    // Los totales se recalculan con lo que hay; propina y descuento siguen como los dejó el servidor.
+    const subtotal = p.lineas.filter((l) => l.estado !== "cancelada").reduce((t, l) => t + Number(l.total), 0);
+    const total = subtotal - Number(p.cuenta.descuento) + Number(p.cuenta.propina);
+    p.cuenta = { ...p.cuenta, subtotal: String(subtotal), total: String(total), pendiente: String(total - Number(p.cuenta.pagado)) };
+  }
+  return p;
+}
+
+/** El plano con las mesas abiertas o con cuenta pedida sin conexión ya marcadas. */
+function mesasConPendientes(mesas: Mesa[], ops: Operacion[]): Mesa[] {
+  let m = mesas.map((x) => ({ ...x }));
+  for (const o of ops) {
+    const d = o.datos as Record<string, any>;
+    if (o.tipo === "abrir_pedido") m = m.map((x) => (x.mesa_id === d.mesa_id && !x.pedido_id ? { ...x, estado: "ocupada" as EstadoMesa, pedido_id: d.pedido_id } : x));
+    else if (o.tipo === "pedir_cuenta") m = m.map((x) => (x.pedido_id === d.pedido_id ? { ...x, estado: "cuenta_pedida" as EstadoMesa } : x));
+    else if (o.tipo === "anular_pedido") m = m.map((x) => (x.pedido_id === d.pedido_id ? { ...x, estado: "libre" as EstadoMesa, pedido_id: null } : x));
+  }
+  return m;
+}
+
+/** Franja de estado: sin conexión, cambios por enviar y operaciones que el servidor rechazó. */
+function AvisoConexion() {
+  const { cola, rechazadas, enLinea, enviando } = useSinConexion();
+  if (enLinea && cola.length === 0 && rechazadas.length === 0) return null;
+  return (
+    <div className="franja-conexion">
+      {!enLinea && <p className="aviso-offline" role="status">Sin conexión. Sigue trabajando: tus pedidos se guardan en la tablet y se envían solos al volver la red.</p>}
+      {cola.length > 0 && (
+        <p className="aviso-cola" role="status">
+          {enviando ? "Enviando…" : `${cola.length} cambio${cola.length === 1 ? "" : "s"} por enviar`}{" "}
+          <button className="secundario" onClick={() => vaciarCola()}>Reintentar</button>
+        </p>
+      )}
+      {rechazadas.length > 0 && (
+        <div className="error" role="alert">
+          <strong>El servidor no aceptó {rechazadas.length === 1 ? "un cambio" : `${rechazadas.length} cambios`}:</strong>
+          <ul>{rechazadas.map((r) => <li key={r.op_id}>{r.error}</li>)}</ul>
+          <button className="secundario" onClick={descartarRechazadas}>Entendido</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Mesero({ sesion, alSalir }: { sesion: Sesion; alSalir: () => void }) {
   const [pedidoId, setPedidoId] = useState<string | null>(null);
+  useState(() => fijarUsuario(sesion.usuario.id));        // antes del primer dibujo: así la pantalla ya lee su copia local
+  useEffect(() => { iniciarSinConexion(sesion.usuario.id); }, [sesion.usuario.id]);
   return (
     <>
       <header className="barra">
@@ -50,6 +144,7 @@ export default function Mesero({ sesion, alSalir }: { sesion: Sesion; alSalir: (
         <span style={{ flex: 1 }} />
         <button className="secundario" onClick={alSalir}>Salir</button>
       </header>
+      <AvisoConexion />
       <main className="contenido">
         {pedidoId ? <VistaPedido pedidoId={pedidoId} alVolver={() => setPedidoId(null)} /> : <Plano alAbrir={setPedidoId} />}
       </main>
@@ -59,14 +154,17 @@ export default function Mesero({ sesion, alSalir }: { sesion: Sesion; alSalir: (
 
 // ── Plano de mesas ──────────────────────────────────────────
 function Plano({ alAbrir }: { alAbrir: (pedidoId: string) => void }) {
-  const [mesas, setMesas] = useState<Mesa[] | null>(null);
+  const [servidor, setMesas] = useState<Mesa[] | null>(() => leerCache<Mesa[]>("mesas"));
   const [error, setError] = useState("");
   const [comensales, setComensales] = useState<Mesa | null>(null);
   const listasAntes = useRef<Set<number>>(new Set());
+  const { cola } = useSinConexion();
+  const mesas = useMemo(() => (servidor ? mesasConPendientes(servidor, cola) : null), [servidor, cola]);
 
   const cargar = useCallback(async () => {
     try {
       const m = await pedir<Mesa[]>("/mesas");
+      guardarCache("mesas", m);
       // Avisa con vibración cuando una mesa pasa a "lista" (la cocina terminó un plato).
       const ahora = new Set(m.filter((x) => x.estado === "lista").map((x) => x.mesa_id));
       if ([...ahora].some((id) => !listasAntes.current.has(id))) navigator.vibrate?.([200, 100, 200]);
@@ -74,7 +172,8 @@ function Plano({ alAbrir }: { alAbrir: (pedidoId: string) => void }) {
       setMesas(m);
       setError("");
     } catch (e: any) {
-      setError(e.message);
+      // Sin red se sigue con la última copia del plano; solo es un error si nunca se pudo cargar.
+      if (!(e instanceof ErrorApi && e.estado === 0)) setError(e.message);
     }
   }, []);
   useEffect(() => {
@@ -82,16 +181,15 @@ function Plano({ alAbrir }: { alAbrir: (pedidoId: string) => void }) {
     const t = setInterval(cargar, 8000);
     return () => clearInterval(t);
   }, [cargar]);
+  // Cuando la cola termina de sincronizar, se vuelve a pedir el plano para ver el estado real.
+  useEffect(() => { cargar(); }, [cola.length, cargar]);
 
-  const abrir = async (mesa: Mesa, n: number | null) => {
-    try {
-      const p = await pedir<Pedido>("/pedidos", { json: { mesa_id: mesa.mesa_id, comensales: n, pedido_id: nuevoId() } });
-      alAbrir(p.id);
-    } catch (e: any) {
-      setError(e.message);
-      setComensales(null);
-      cargar();
-    }
+  // Abrir una mesa se anota en la libreta: funciona igual con o sin red.
+  const abrir = (mesa: Mesa, n: number | null) => {
+    const id = nuevoId();
+    encolar("abrir_pedido", { mesa_id: mesa.mesa_id, comensales: n, pedido_id: id });
+    setComensales(null);
+    alAbrir(id);
   };
   const tocar = (mesa: Mesa) => {
     if (mesa.pedido_id) alAbrir(mesa.pedido_id);
@@ -151,8 +249,10 @@ function Plano({ alAbrir }: { alAbrir: (pedidoId: string) => void }) {
 
 // ── Pedido de una mesa ──────────────────────────────────────
 function VistaPedido({ pedidoId, alVolver }: { pedidoId: string; alVolver: () => void }) {
-  const [pedido, setPedido] = useState<Pedido | null>(null);
-  const [carta, setCarta] = useState<Plato[]>([]);
+  const [servidor, setServidor] = useState<Pedido | null>(() => leerCache<Pedido>("pedido_" + pedidoId));
+  const [carta, setCarta] = useState<Plato[]>(() => leerCache<Plato[]>("carta") ?? []);
+  const { cola, enLinea } = useSinConexion();
+  const pedido = useMemo(() => pedidoConPendientes(servidor, cola, pedidoId, carta, leerCache<Mesa[]>("mesas") ?? []), [servidor, cola, pedidoId, carta]);
   const [categoria, setCategoria] = useState("Todo");
   const [busca, setBusca] = useState("");
   const [elegido, setElegido] = useState<Plato | null>(null);
@@ -162,17 +262,26 @@ function VistaPedido({ pedidoId, alVolver }: { pedidoId: string; alVolver: () =>
 
   const recargar = useCallback(async () => {
     try {
-      setPedido(await pedir<Pedido>(`/pedidos/${pedidoId}`));
+      const p = await pedir<Pedido>(`/pedidos/${pedidoId}`);
+      guardarCache("pedido_" + pedidoId, p);
+      setServidor(p);
     } catch (e: any) {
+      // 404 = la mesa se abrió sin conexión y todavía no llegó al servidor: se muestra lo local.
+      // Sin red también se sigue con lo último que se vio.
+      if (e instanceof ErrorApi && (e.estado === 0 || e.estado === 404)) return;
       setError(e.message);
     }
   }, [pedidoId]);
   useEffect(() => {
     recargar();
-    pedir<Plato[]>("/carta").then(setCarta).catch((e) => setError(e.message));
+    pedir<Plato[]>("/carta").then((c) => { guardarCache("carta", c); setCarta(c); }).catch((e) => {
+      if (!(e instanceof ErrorApi && e.estado === 0)) setError(e.message);
+    });
     const t = setInterval(recargar, 8000);
     return () => clearInterval(t);
   }, [recargar]);
+  // Al terminar de sincronizar se vuelve a pedir el pedido para ver el estado real.
+  useEffect(() => { recargar(); }, [cola.length, recargar]);
 
   const categorias = useMemo(() => ["Todo", ...Array.from(new Set(carta.map((p) => p.categoria ?? "Otros")))], [carta]);
   const visibles = carta.filter(
@@ -195,34 +304,39 @@ function VistaPedido({ pedidoId, alVolver }: { pedidoId: string; alVolver: () =>
     }
   };
 
-  const agregar = (datos: { cantidad: number; comensal: number | null; sin: number[]; extras: number[]; nota: string }, plato: Plato) =>
-    hacer(async () => {
-      const r = await pedir<{ disponibilidad: { alcanza: boolean; faltas: Falta[] } }>(`/pedidos/${pedidoId}/lineas`, {
-        json: {
-          item_id: plato.item_id, cantidad: datos.cantidad, comensal: datos.comensal, sin_ingredientes: datos.sin,
-          extra_ids: datos.extras, nota: datos.nota || null, linea_id: nuevoId(),
-        },
-      });
-      setElegido(null);
-      if (!r.disponibilidad.alcanza) setAviso(`Ojo: a ${plato.nombre} le falta ${r.disponibilidad.faltas.map((f) => f.nombre).join(", ")}. Igual quedó anotado.`);
-      else setAviso(`${plato.nombre} anotado.`);
+  // Todo lo que anota el mesero va a la libreta (cola): funciona igual con o sin red y se envía solo.
+  const donde = enLinea ? "" : " Se enviará al volver la conexión.";
+  const agregar = (datos: { cantidad: number; comensal: number | null; sin: number[]; extras: number[]; nota: string }, plato: Plato) => {
+    encolar("tomar_linea", {
+      pedido_id: pedidoId, item_id: plato.item_id, cantidad: datos.cantidad, comensal: datos.comensal, sin_ingredientes: datos.sin,
+      extra_ids: datos.extras, nota: datos.nota || null, linea_id: nuevoId(),
     });
+    setElegido(null);
+    setError("");
+    // El semáforo viene de la carta que ya tiene la tablet: solo avisa, nunca bloquea.
+    setAviso(plato.alcanza ? `${plato.nombre} anotado.` : `Ojo: a ${plato.nombre} le falta ${plato.faltas.map((f) => f.nombre).join(", ")}. Igual quedó anotado.`);
+  };
 
-  const enviar = () =>
-    hacer(async () => {
-      const r = await pedir<{ lineas: unknown[]; faltantes: { nombre: string }[] }>(`/pedidos/${pedidoId}/enviar`, { metodo: "POST" });
-      setAviso(
-        r.faltantes?.length
-          ? `Enviado. Avisa a cocina: falta ${r.faltantes.map((f) => f.nombre).join(", ")}.`
-          : `Enviado a cocina (${r.lineas.length} plato${r.lineas.length === 1 ? "" : "s"}).`,
-      );
-    });
+  const enviar = () => {
+    encolar("enviar", { pedido_id: pedidoId });
+    setError("");
+    setAviso(`Enviado a cocina (${enLibreta.length} plato${enLibreta.length === 1 ? "" : "s"}).${donde}`);
+  };
 
-  const pedirCuenta = () => hacer(() => pedir(`/pedidos/${pedidoId}/cuenta`, { metodo: "POST" }), "Cuenta pedida. La caja la recibirá.");
-  const borrar = (l: Linea) => hacer(() => pedir(`/lineas/${l.id}`, { metodo: "DELETE" }));
+  const pedirCuenta = () => {
+    encolar("pedir_cuenta", { pedido_id: pedidoId });
+    setError("");
+    setAviso(`Cuenta pedida. La caja la recibirá.${donde}`);
+  };
+  const borrar = (l: Linea) => {
+    // Si ese plato todavía no salió de la tablet, basta con sacarlo de la cola; si no, se anota que se quitó.
+    if (!descartarSiNoSalio((o) => o.tipo === "tomar_linea" && o.datos.linea_id === l.id)) encolar("quitar_linea", { linea_id: l.id });
+  };
   const cancelar = (l: Linea) => {
-    if (window.confirm(`¿Cancelar "${l.nombre}"? Si cocina ya lo preparó, quedará como merma.`))
-      hacer(() => pedir(`/lineas/${l.id}/cancelar`, { metodo: "POST" }), `${l.nombre} cancelado.`);
+    if (window.confirm(`¿Cancelar "${l.nombre}"? Si cocina ya lo preparó, quedará como merma.`)) {
+      encolar("cancelar_linea", { linea_id: l.id });
+      setAviso(`${l.nombre} cancelado.${donde}`);
+    }
   };
   const entregar = (l: Linea) => hacer(() => pedir(`/lineas/${l.id}/entregar`, { metodo: "POST" }), `${l.nombre} entregado.`);
 
@@ -246,7 +360,7 @@ function VistaPedido({ pedidoId, alVolver }: { pedidoId: string; alVolver: () =>
             <li key={l.id} className={`linea ${l.estado}`}>
               <div>
                 <strong>{l.cantidad}× {l.nombre}</strong>{" "}
-                <span className={`estado ${l.estado}`}>{ETIQUETA_ESTADO[l.estado] ?? l.estado}</span>
+                <span className={`estado ${l.estado}`}>{ETIQUETA_ESTADO[l.estado] ?? l.estado}</span>{l.pendiente && <span className="pendiente" title="Se enviará al volver la conexión"> ⏳</span>}
                 <small className="suave">
                   {l.comensal ? `Persona ${l.comensal}` : ""}
                   {l.quitados.length ? ` · sin ${nombresDe(l.quitados, carta.find((p) => p.item_id === l.item_id)?.removibles ?? [])}` : ""}

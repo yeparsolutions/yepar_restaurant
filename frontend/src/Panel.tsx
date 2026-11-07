@@ -176,7 +176,7 @@ function ResultadoCarga({ r }: { r: Reporte }) {
 
 // ── Equipo: locales y personal ───────────────────────────────
 type Sucursal = { id: number; nombre: string };
-type Persona = { id: number; nombre: string; username: string; roles: string[]; sucursal_id: number | null; estacion: string | null; activo: boolean };
+type Persona = { id: number; nombre: string; username: string; roles: string[]; sucursal_id: number | null; estacion: string | null; activo: boolean; descuento_max_pct?: string };
 const ROLES: Record<string, string> = { administrador: "Administrador", cajero: "Cajero", mesero: "Mesero", cocinero: "Cocinero" };
 
 function Equipo() {
@@ -217,7 +217,7 @@ function Equipo() {
       <NuevoLocal alCrear={cargar} />
       <h2>Personal</h2>
       <table>
-        <thead><tr><th>Nombre</th><th>Usuario</th><th>Puesto</th><th>Local</th><th></th></tr></thead>
+        <thead><tr><th>Nombre</th><th>Usuario</th><th>Puesto</th><th>Local</th><th>Descuento máx.</th><th></th></tr></thead>
         <tbody>
           {gente.filter((p) => p.activo).map((p) => (
             <tr key={p.id}>
@@ -225,6 +225,7 @@ function Equipo() {
               <td>{p.username}</td>
               <td>{p.roles.map((r) => ROLES[r] ?? r).join(", ")}{p.estacion ? ` (${p.estacion})` : ""}</td>
               <td>{nombreLocal(p.sucursal_id)}</td>
+              <td>{p.roles.includes("cajero") ? <TopeDescuento persona={p} alGuardar={cargar} /> : "—"}</td>
               <td><button className="enlace peligro" onClick={() => baja(p)}>Dar de baja</button></td>
             </tr>
           ))}
@@ -232,6 +233,29 @@ function Equipo() {
       </table>
       <NuevaPersona locales={locales} alCrear={cargar} />
     </section>
+  );
+}
+
+/** El tope de descuento de un cajero: hasta ahí descuenta solo; sobre eso necesita el PIN de un supervisor. */
+function TopeDescuento({ persona, alGuardar }: { persona: Persona; alGuardar: () => void }) {
+  const [v, setV] = useState(String(Number(persona.descuento_max_pct ?? 0)));
+  const [msg, setMsg] = useState("");
+  const cambiado = Number(v) !== Number(persona.descuento_max_pct ?? 0);
+  async function guardar() {
+    setMsg("");
+    try {
+      await pedir(`/personal/${persona.id}`, { metodo: "PATCH", json: { descuento_max_pct: v } });
+      alGuardar();
+    } catch (err) {
+      setMsg((err as Error).message);
+    }
+  }
+  return (
+    <span className="en-linea" style={{ margin: 0, flexWrap: "nowrap" }}>
+      <input type="number" min="0" max="100" step="any" value={v} onChange={(e) => setV(e.target.value)} aria-label={`Descuento máximo de ${persona.nombre} en %`} style={{ width: 80, minWidth: 0 }} />%
+      {cambiado && <button className="secundario" onClick={guardar}>Guardar</button>}
+      {msg && <small className="error">{msg}</small>}
+    </span>
   );
 }
 
