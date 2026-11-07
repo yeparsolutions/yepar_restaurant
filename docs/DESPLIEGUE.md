@@ -62,7 +62,7 @@ Con ese código, el usuario y la contraseña se inicia sesión (`POST /auth/logi
 
 ## Cuidados
 
-- **Respaldos:** activa los respaldos de la base en Railway (*Postgres → Backups*) antes de tener clientes reales.
+- **Respaldos:** activa los respaldos de la base en Railway (*Postgres → Backups*) antes de tener clientes reales. Además, `scripts/respaldo_db.sh` saca una copia propia (`pg_dump` comprimido) que puedes guardar fuera de Railway: `DATABASE_URL=<url pública de la base> scripts/respaldo_db.sh ./respaldos 14`. Para restaurar en una base vacía: `gunzip -c respaldos/yepar_<fecha>.sql.gz | psql "<url destino>"`. Probado: respalda, restaura en otra base y los datos coinciden. Prueba la restauración de vez en cuando; un respaldo que nunca se restauró no es una garantía. Los archivos contienen datos de clientes: guárdalos cifrados o en un lugar privado.
 - **Una sola réplica:** las migraciones corren al arrancar; con varias réplicas arrancando a la vez podrían pisarse. El `railway.json` fija `numReplicas: 1`.
 - **Cambios de esquema:** cada cambio de modelos trae su migración (`alembic revision --autogenerate`); un test avisa si falta.
 - **Primera vez en PostgreSQL:** las pruebas corren sobre SQLite. El despliegue de prueba (proyecto `YeparRestaurant-Test`) levantó la API sobre PostgreSQL real con el comando de arranque del paso 5; confirma las tablas con `railway connect postgres` y `SELECT version_num FROM alembic_version;` (debe dar `0006`). Haz siempre el primer despliegue de un cambio grande en un proyecto de prueba.
