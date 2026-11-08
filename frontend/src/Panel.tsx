@@ -7,11 +7,12 @@ import { descargar, ErrorApi, guardarSesion, pedir, type Sesion } from "./api";
 import { Marca } from "./App";
 import Compras from "./Compras";
 import Configuracion from "./Configuracion";
+import ConteoFisico from "./ConteoFisico";
 import Inventario from "./Inventario";
 import ResumenDia from "./Resumen";
 
-type Pestana = "resumen" | "inicio" | "inventario" | "compras" | "carga" | "equipo" | "config";
-const PESTANAS: [Pestana, string][] = [["resumen", "Resumen"], ["inicio", "Arranque"], ["inventario", "Inventario"], ["compras", "Compras"], ["carga", "Carga por Excel"], ["equipo", "Equipo"], ["config", "Configuración"]];
+type Pestana = "resumen" | "inicio" | "inventario" | "compras" | "conteo" | "carga" | "equipo" | "config";
+const PESTANAS: [Pestana, string][] = [["resumen", "Resumen"], ["inicio", "Arranque"], ["inventario", "Inventario"], ["compras", "Compras"], ["conteo", "Conteo"], ["carga", "Carga por Excel"], ["equipo", "Equipo"], ["config", "Configuración"]];
 
 export default function Panel({ sesion, alSalir }: { sesion: Sesion; alSalir: () => void }) {
   // Al entrar: con el arranque completo vas directo al resumen del día; si falta algo, al asistente.
@@ -44,6 +45,7 @@ export default function Panel({ sesion, alSalir }: { sesion: Sesion; alSalir: ()
         {pestana === "inicio" && <Inicio ir={setPestana} />}
         {pestana === "inventario" && <Inventario />}
         {pestana === "compras" && <Compras />}
+        {pestana === "conteo" && <ConteoFisico />}
         {pestana === "carga" && <Carga />}
         {pestana === "equipo" && <Equipo />}
         {pestana === "config" && <Configuracion sesion={sesion} />}
