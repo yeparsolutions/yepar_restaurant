@@ -325,3 +325,20 @@ def test_el_admin_renombra_y_quita_mesas(api):
     assert api.como("admin", "delete", f"/mesas/{api.s['m1'].id}").status_code == 204
     assert "Mesa 1" not in [m["nombre"] for m in api.get("admin", "/mesas").json()]
     assert api.post("admin", "/mesas", {"nombre": "Mesa 1"}).status_code == 201                                     # el nombre se reutiliza
+
+
+def test_cuentas_para_llevar_se_listan_para_el_mesero_y_el_cajero(api):
+    # Sin mesa: mostrador o delivery. Ana abre una; Beto, otra.
+    a = api.post("ana", "/pedidos", {}).json()
+    b = api.post("beto", "/pedidos", {}).json()
+    assert a["mesa"] is None
+    api.post("ana", f"/pedidos/{a['id']}/lineas", {"item_id": api.s["burger"].id})
+    mesa = abrir_mesa(api, "m1", "ana")                       # una con mesa NO aparece en la lista
+    assert mesa["mesa"] is not None
+    de_ana = api.get("ana", "/pedidos-sin-mesa").json()
+    assert [x["pedido_id"] for x in de_ana] == [a["id"]]
+    assert de_ana[0]["lineas"] == 1 and de_ana[0]["total"] == "6500.00" and de_ana[0]["despacho_estado"] is None
+    todas = api.get("cajera", "/pedidos-sin-mesa").json()
+    assert {x["pedido_id"] for x in todas} == {a["id"], b["id"]}
+    assert api.get("cajera", "/pedidos-sin-mesa").status_code == 200
+    assert api.get("chef", "/pedidos-sin-mesa").status_code == 403
