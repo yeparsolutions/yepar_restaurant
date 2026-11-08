@@ -133,6 +133,35 @@ class Pago(Base):
         return (self.recibido - self.monto) if self.recibido is not None else Decimal("0")
 
 
+class Devolucion(Base):
+    """
+    Dinero que se le devuelve al cliente de una cuenta ya cobrada (total o parcial).
+    Analogía: el comprobante de devolución del mostrador. Sale por el mismo medio por el que entró:
+    el efectivo sale del cajón (y baja lo esperado en el arqueo del turno); tarjeta y transferencia
+    se devuelven por su propio canal y solo quedan registradas aquí.
+    """
+    __tablename__ = "devoluciones"
+    __table_args__ = (
+        CheckConstraint("monto > 0", name="ck_devolucion_monto_positivo"),
+        Index("ix_devolucion_pedido", "pedido_id"),
+    )
+
+    id:          Mapped[str] = mapped_column(String(36), primary_key=True, default=nuevo_uuid)
+    empresa_id:  Mapped[int] = mapped_column(ForeignKey("empresas.id", ondelete="CASCADE"), index=True)
+    sucursal_id: Mapped[int] = mapped_column(ForeignKey("sucursales.id", ondelete="CASCADE"), index=True)
+    pedido_id:   Mapped[str] = mapped_column(ForeignKey("pedidos.id"))
+
+    medio: Mapped[MedioPago] = mapped_column(columna_enum(MedioPago))
+    monto: Mapped[Decimal]   = mapped_column(DINERO)
+    motivo: Mapped[str]      = mapped_column(String(200))
+    numero_operacion: Mapped[Optional[str]] = mapped_column(String(60))      # comprobante de la devolución (tarjeta/transferencia)
+    terminal_id: Mapped[Optional[int]] = mapped_column(ForeignKey("terminales_pago.id"), index=True)
+    turno_id:    Mapped[Optional[int]] = mapped_column(ForeignKey("turnos_caja.id"), index=True)     # solo efectivo
+    usuario_id:  Mapped[Optional[int]] = mapped_column(ForeignKey("usuarios.id", ondelete="SET NULL"))
+    autorizado_por_id: Mapped[Optional[int]] = mapped_column(ForeignKey("usuarios.id", ondelete="SET NULL"))
+    creado_en:   Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class PropinaPorEntregar(Base):
     """
     El LIBRO DE PROPINAS. Cada mesa cobrada con propina deja una fila:

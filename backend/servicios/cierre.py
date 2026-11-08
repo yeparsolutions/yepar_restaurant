@@ -20,7 +20,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from errores import ErrorNegocio, ErrorNoEncontrado
-from models import (EstadoPedido, EstadoTurno, MedioPago, Pago, Pedido, TerminalPago,
+from models import (Devolucion, EstadoPedido, EstadoTurno, MedioPago, Pago, Pedido, TerminalPago,
                     TurnoCaja)
 from servicios.cobro import calcular_cuenta
 from servicios.stock import validar_sucursal
@@ -47,7 +47,8 @@ class ResumenDia:
     descuentos: Decimal
     propinas: Decimal
     total_cobrado: Decimal                  # ventas − descuentos + propinas
-    por_medio: dict = field(default_factory=dict)      # {"efectivo": monto, "tarjeta": ..., ...}
+    por_medio: dict = field(default_factory=dict)      # neto de devoluciones: {"efectivo": monto, "tarjeta": ..., ...}
+    devoluciones: Decimal = CERO                      # dinero devuelto a clientes en el período
     turnos_con_diferencia: list = field(default_factory=list)   # [(turno_id, diferencia)]
 
 
@@ -63,10 +64,15 @@ def cuadre_terminal(db: Session, *, empresa_id: int, terminal_id: int, desde: da
     pagos = (db.query(Pago).filter(Pago.terminal_id == terminal.id, Pago.medio == MedioPago.tarjeta,
                                    Pago.creado_en >= desde, Pago.creado_en < hasta)
              .order_by(Pago.creado_en, Pago.numero_operacion).all())
-    total = sum((p.monto for p in pagos), CERO).quantize(CENTAVO)
-    cuadre = CuadreTerminal(terminal_id=terminal.id, nombre=terminal.nombre, cantidad=len(pagos),
+    # Las devoluciones por tarjeta restan: el comprobante del terminal las trae como movimientos negativos.
+    devoluciones = (db.query(Devolucion).filter(Devolucion.terminal_id == terminal.id, Devolucion.medio == MedioPago.tarjeta,
+                                                Devolucion.creado_en >= desde, Devolucion.creado_en < hasta)
+                    .order_by(Devolucion.creado_en, Devolucion.numero_operacion).all())
+    total = (sum((p.monto for p in pagos), CERO) - sum((d.monto for d in devoluciones), CERO)).quantize(CENTAVO)
+    cuadre = CuadreTerminal(terminal_id=terminal.id, nombre=terminal.nombre, cantidad=len(pagos) + len(devoluciones),
                             total_registrado=total,
-                            operaciones=[(p.numero_operacion, p.monto) for p in pagos])
+                            operaciones=[(p.numero_operacion, p.monto) for p in pagos]
+                                        + [(d.numero_operacion, -d.monto) for d in devoluciones])
     if reportado is not None:
         cuadre.total_reportado = Decimal(str(reportado)).quantize(CENTAVO)
         cuadre.diferencia = cuadre.total_reportado - total
@@ -94,6 +100,14 @@ def resumen_periodo(db: Session, *, empresa_id: int, sucursal_id: int, desde: da
                          Pago.creado_en >= desde, Pago.creado_en < hasta)
                  .group_by(Pago.medio).all())
     resumen.por_medio = {medio.value: Decimal(total).quantize(CENTAVO) for medio, total in por_medio}
+    devueltas = (db.query(Devolucion.medio, func.sum(Devolucion.monto))
+                 .filter(Devolucion.empresa_id == empresa_id, Devolucion.sucursal_id == sucursal_id,
+                         Devolucion.creado_en >= desde, Devolucion.creado_en < hasta)
+                 .group_by(Devolucion.medio).all())
+    for medio, total in devueltas:
+        resumen.por_medio[medio.value] = (resumen.por_medio.get(medio.value, CERO) - Decimal(total)).quantize(CENTAVO)
+        resumen.devoluciones += Decimal(total)
+    resumen.devoluciones = resumen.devoluciones.quantize(CENTAVO)
 
     turnos = (db.query(TurnoCaja).filter(TurnoCaja.empresa_id == empresa_id, TurnoCaja.sucursal_id == sucursal_id,
                                          TurnoCaja.estado == EstadoTurno.cerrado,

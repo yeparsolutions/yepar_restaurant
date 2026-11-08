@@ -577,6 +577,7 @@ class ArqueoOut(BaseModel):
     turno_id: int
     fondo: Dinero
     efectivo_cobrado: Dinero
+    efectivo_devuelto: Dinero
     esperado: Dinero
     cantidad_pagos: int
 
@@ -689,6 +690,39 @@ class ParteRepartoOut(BaseModel):
     monto: Dinero
 
 
+class DevolucionIn(Entrada):
+    medio: Literal["efectivo", "tarjeta", "transferencia"]
+    monto: Decimal
+    motivo: str = Field(min_length=3, max_length=200)
+    numero_operacion: Optional[str] = Field(default=None, max_length=60)   # tarjeta/transferencia
+    supervisor_id: Optional[int] = None
+    pin_supervisor: Optional[str] = Field(default=None, max_length=20)
+    anular_documento: bool = False           # además emite la nota de crédito si se devuelve toda la cuenta
+
+
+class CobradaOut(BaseModel):
+    pedido_id: str
+    mesa: Optional[str] = None
+    cerrado_en: Optional[datetime] = None
+    total: Dinero
+    pagado: dict[str, Dinero]                # por medio
+    devuelto: dict[str, Dinero]              # por medio
+
+
+class DevolucionOut(BaseModel):
+    id: str
+    pedido_id: str
+    medio: str
+    monto: Dinero
+    motivo: str
+    numero_operacion: Optional[str] = None
+    turno_id: Optional[int] = None
+    usuario_id: Optional[int] = None
+    autorizado_por_id: Optional[int] = None
+    creado_en: datetime
+    nota_credito_estado: Optional[str] = None   # solo al devolver: emitido | pendiente | rechazado | None
+
+
 class CuadreTerminalOut(BaseModel):
     terminal_id: int
     nombre: str
@@ -711,6 +745,7 @@ class ResumenPeriodoOut(BaseModel):
     propinas: Dinero
     total_cobrado: Dinero
     por_medio: dict[str, Dinero]
+    devoluciones: Dinero
     turnos_con_diferencia: list[TurnoConDiferenciaOut]
 
 

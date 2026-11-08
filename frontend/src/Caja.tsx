@@ -24,6 +24,7 @@ type Pedido = { id: string; mesa: string | null; estado: string; lineas: Linea[]
 type Pago = { vuelto: string | null; pedido_estado: string; documento_estado: string | null; documento_folio: string | null; cuenta: Cuenta };
 type Supervisor = { id: number; nombre: string };
 type Saldo = { mesero_id: number | null; nombre: string | null; monto: string };
+type Cobrada = { pedido_id: string; mesa: string | null; cerrado_en: string | null; total: string; pagado: Record<string, string>; devuelto: Record<string, string> };
 type Arqueo = { fondo: string; efectivo_cobrado: string; esperado: string; cantidad_pagos: number };
 
 const num = (v: string | number | null | undefined) => Number(v ?? 0);
@@ -42,7 +43,7 @@ export default function Caja({ sesion, alSalir }: { sesion: Sesion; alSalir: () 
   const [turno, setTurno] = useState<Turno | null | undefined>(undefined); // undefined = cargando
   const [error, setError] = useState("");
   const [cerrando, setCerrando] = useState(false);
-  const [vista, setVista] = useState<"cobrar" | "propinas">("cobrar");
+  const [vista, setVista] = useState<"cobrar" | "cobradas" | "propinas">("cobrar");
   const [pedidoId, setPedidoId] = useState<string | null>(null);
   useState(() => fijarCajero(sesion.usuario.id));            // la copia local ya está disponible en la primera pantalla
   useEffect(() => { iniciarPagos(sesion.usuario.id); }, [sesion.usuario.id]);
@@ -88,9 +89,12 @@ export default function Caja({ sesion, alSalir }: { sesion: Sesion; alSalir: () 
           <>
             <nav className="pestanas" aria-label="Caja">
               <button className={`pestana ${vista === "cobrar" ? "activa" : ""}`} onClick={() => setVista("cobrar")}>Cobrar</button>
+              <button className={`pestana ${vista === "cobradas" ? "activa" : ""}`} onClick={() => setVista("cobradas")}>Cobradas</button>
               <button className={`pestana ${vista === "propinas" ? "activa" : ""}`} onClick={() => setVista("propinas")}>Propinas</button>
             </nav>
-            {vista === "cobrar" ? <PorCobrar alAbrir={setPedidoId} /> : <Propinas />}
+            {vista === "cobrar" ? <PorCobrar alAbrir={setPedidoId} />
+              : vista === "cobradas" ? <Cobradas esAdmin={sesion.usuario.roles.includes("administrador")} />
+              : <Propinas />}
           </>
         )}
       </main>
@@ -430,6 +434,129 @@ function PinSupervisorDialogo({ porcentaje, alCerrar, alAutorizar }: {
           </label>
           {error && <p className="error" role="alert">{error}</p>}
           <button type="submit" disabled={!sup || pin.length < 4}>Autorizar descuento</button>
+        </form>
+      )}
+    </Dialogo>
+  );
+}
+
+// ── Cuentas cobradas y devoluciones ─────────────────────────
+const NOMBRE_MEDIO: Record<string, string> = { efectivo: "Efectivo", tarjeta: "Tarjeta", transferencia: "Transferencia" };
+
+function Cobradas({ esAdmin }: { esAdmin: boolean }) {
+  const [lista, setLista] = useState<Cobrada[] | null>(null);
+  const [error, setError] = useState("");
+  const [aviso, setAviso] = useState("");
+  const [devolviendo, setDevolviendo] = useState<Cobrada | null>(null);
+  const cargar = useCallback(() => pedir<Cobrada[]>("/cobradas").then((l) => { setLista(l); setError(""); }).catch((e) => setError(e.message)), []);
+  useEffect(() => { cargar(); }, [cargar]);
+  return (
+    <>
+      <div className="encabezado"><h1>Cuentas cobradas</h1><span className="suave">Últimas 24 horas</span></div>
+      {error && <p className="error" role="alert">{error}</p>}
+      {aviso && <p className="exito" role="status">{aviso}</p>}
+      {!lista ? <p className="suave">Cargando…</p> : lista.length === 0 ? <p className="suave">No hay cuentas cobradas en las últimas 24 horas.</p> : (
+        <ul className="lineas">
+          {lista.map((c) => {
+            const devuelto = Object.values(c.devuelto).reduce((s, v) => s + num(v), 0);
+            return (
+              <li key={c.pedido_id} className="linea">
+                <div>
+                  <strong>{c.mesa ?? "Cuenta"} · {plata(c.total)}</strong>
+                  <div className="suave">{c.cerrado_en ? new Date(c.cerrado_en).toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" }) : ""}
+                    {devuelto > 0 ? ` · devuelto ${plata(devuelto)}` : ""}</div>
+                </div>
+                <button className="secundario" onClick={() => { setAviso(""); setDevolviendo(c); }}>Devolver dinero</button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {devolviendo && (
+        <DialogoDevolucion cobrada={devolviendo} esAdmin={esAdmin} alCerrar={() => setDevolviendo(null)}
+          alTerminar={(msg) => { setDevolviendo(null); setAviso(msg); cargar(); }} />
+      )}
+    </>
+  );
+}
+
+/** Devolver dinero de una cuenta cobrada: por el mismo medio de pago, con motivo y (el cajero) con el PIN de un supervisor. */
+function DialogoDevolucion({ cobrada, esAdmin, alCerrar, alTerminar }: {
+  cobrada: Cobrada; esAdmin: boolean; alCerrar: () => void; alTerminar: (mensaje: string) => void;
+}) {
+  const quedan = (m: string) => Math.max(num(cobrada.pagado[m]) - num(cobrada.devuelto[m]), 0);
+  const medios = ["efectivo", "tarjeta", "transferencia"].filter((m) => quedan(m) > 0);
+  const [medio, setMedio] = useState(medios[0] ?? "efectivo");
+  const [monto, setMonto] = useState(medios[0] ? String(quedan(medios[0])) : "");
+  const [motivo, setMotivo] = useState("");
+  const [operacion, setOperacion] = useState("");
+  const [anular, setAnular] = useState(false);
+  const [sups, setSups] = useState<Supervisor[]>([]);
+  const [sup, setSup] = useState("");
+  const [pin, setPin] = useState("");
+  const [error, setError] = useState("");
+  const [ocupado, setOcupado] = useState(false);
+  useEffect(() => {
+    if (esAdmin) return;
+    pedir<Supervisor[]>("/supervisores").then((l) => { setSups(l); setSup(String(l[0]?.id ?? "")); }).catch((e) => setError(e.message));
+  }, [esAdmin]);
+  const cambiarMedio = (m: string) => { setMedio(m); setMonto(String(quedan(m))); };
+
+  const enviar = async (ev: React.FormEvent) => {
+    ev.preventDefault();
+    setError(""); setOcupado(true);
+    try {
+      const r = await pedir<{ monto: string; nota_credito_estado: string | null }>(`/pedidos/${cobrada.pedido_id}/devoluciones`, {
+        json: {
+          medio, monto, motivo: motivo.trim(), anular_documento: anular,
+          numero_operacion: medio !== "efectivo" ? operacion.trim() : null,
+          ...(esAdmin ? {} : { supervisor_id: Number(sup), pin_supervisor: pin }),
+        },
+      });
+      const nota = r.nota_credito_estado;
+      alTerminar(`Devolución registrada: ${plata(r.monto)} por ${NOMBRE_MEDIO[medio].toLowerCase()}.` +
+        (nota === "emitido" ? " Nota de crédito emitida." : nota === "pendiente" ? " La nota de crédito quedó pendiente." :
+         nota === "no_aplica" ? " (La nota de crédito se emite al devolver toda la cuenta.)" : nota === "no_disponible" ? " No se pudo emitir la nota de crédito: hazla desde facturación." : ""));
+    } catch (e: any) {
+      setError(e.message); setPin("");
+    } finally { setOcupado(false); }
+  };
+
+  return (
+    <Dialogo titulo={`Devolver dinero · ${cobrada.mesa ?? "Cuenta"}`} alCerrar={alCerrar}>
+      {medios.length === 0 ? <p className="suave">Ya se devolvió todo lo cobrado de esta cuenta.</p> : (
+        <form onSubmit={enviar} style={{ display: "grid", gap: 8 }}>
+          <label className="campo"><span>Por dónde se devuelve</span>
+            <select value={medio} onChange={(e) => cambiarMedio(e.target.value)}>
+              {medios.map((m) => <option key={m} value={m}>{NOMBRE_MEDIO[m]} (hasta {plata(quedan(m))})</option>)}
+            </select>
+          </label>
+          <label className="campo"><span>Monto</span>
+            <input type="number" inputMode="decimal" min="0" step="any" value={monto} onChange={(e) => setMonto(e.target.value)} required />
+            {medio === "efectivo" && <small>Sale del cajón: baja lo esperado en tu arqueo.</small>}
+          </label>
+          {medio !== "efectivo" && (
+            <label className="campo"><span>Número de operación de la devolución</span>
+              <input value={operacion} onChange={(e) => setOperacion(e.target.value)} required maxLength={60} />
+            </label>
+          )}
+          <label className="campo"><span>Motivo</span>
+            <input value={motivo} onChange={(e) => setMotivo(e.target.value)} required minLength={3} maxLength={200} placeholder="Ej.: plato frío, cobro duplicado" />
+          </label>
+          <label className="opcion"><input type="checkbox" checked={anular} onChange={(e) => setAnular(e.target.checked)} />
+            <span>Emitir nota de crédito si se devuelve toda la cuenta</span></label>
+          {!esAdmin && (
+            <>
+              <label className="campo"><span>Supervisor</span>
+                <select value={sup} onChange={(e) => setSup(e.target.value)}>{sups.map((s) => <option key={s.id} value={s.id}>{s.nombre}</option>)}</select>
+              </label>
+              <label className="campo"><span>PIN del supervisor</span>
+                <input type="password" inputMode="numeric" maxLength={6} value={pin} onChange={(e) => setPin(e.target.value)} autoComplete="off" required />
+              </label>
+            </>
+          )}
+          {error && <p className="error" role="alert">{error}</p>}
+          <button type="submit" disabled={ocupado || !monto || !motivo.trim() || (!esAdmin && (!sup || pin.length < 4))}>Devolver {monto ? plata(monto) : ""}</button>
         </form>
       )}
     </Dialogo>

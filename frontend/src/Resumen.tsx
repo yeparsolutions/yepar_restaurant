@@ -11,7 +11,7 @@ import { useCallback, useEffect, useState } from "react";
 import { pedir, type Sesion } from "./api";
 
 type Sucursal = { id: number; nombre: string };
-type Resumen = { cerradas: number; ventas: string; descuentos: string; propinas: string; total_cobrado: string; por_medio: Record<string, string>; turnos_con_diferencia: { turno_id: number; diferencia: string }[] };
+type Resumen = { cerradas: number; ventas: string; descuentos: string; propinas: string; total_cobrado: string; por_medio: Record<string, string>; devoluciones?: string; turnos_con_diferencia: { turno_id: number; diferencia: string }[] };
 type Mesa = { mesa_id: number; estado: "libre" | "ocupada" | "lista" | "cuenta_pedida" };
 type Alerta = { item_id: number; nombre: string; disponible: string; stock_minimo: string; se_produce: boolean; unidad: string };
 type Compras = { lineas: unknown[]; costo_total_estimado: string };
@@ -112,6 +112,7 @@ function Tablero({ local }: { local: number }) {
 
         <div className="panelito">
           <h2>Cobros por medio</h2>
+          {res && Number(res.devoluciones ?? 0) > 0 && <p className="suave">Netos de {plata(res.devoluciones!)} devueltos a clientes.</p>}
           {!res ? aviso(res) : Object.keys(res.por_medio).length === 0 ? <p className="suave">Sin cobros todavía.</p> : (
             <ul className="lista">
               {Object.entries(res.por_medio).map(([k, v]) => (
