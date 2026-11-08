@@ -19,7 +19,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from errores import ErrorNegocio, ErrorNoEncontrado
-from models import (Caja, EstadoTurno, MedioPago, Pago, RolUsuario, TerminalPago,
+from models import (Caja, Devolucion, EstadoTurno, MedioPago, Pago, RolUsuario, TerminalPago,
                     TurnoCaja, Usuario)
 from servicios.stock import validar_sucursal
 from unidades import a_decimal
@@ -56,7 +56,8 @@ class Arqueo:
     turno_id: int
     fondo: Decimal
     efectivo_cobrado: Decimal         # suma del efectivo que quedó en el cajón (sin los vueltos)
-    esperado: Decimal                 # fondo + efectivo cobrado
+    efectivo_devuelto: Decimal        # efectivo que salió del cajón en devoluciones
+    esperado: Decimal                 # fondo + efectivo cobrado − efectivo devuelto
     cantidad_pagos: int
 
 
@@ -131,8 +132,11 @@ def arqueo_turno(db: Session, *, empresa_id: int, turno_id: int) -> Arqueo:
     total, cantidad = db.query(func.coalesce(func.sum(Pago.monto), 0), func.count(Pago.id)).filter(
         Pago.turno_id == turno.id, Pago.medio == MedioPago.efectivo).one()
     cobrado = Decimal(total).quantize(Decimal("0.01"))
-    return Arqueo(turno_id=turno.id, fondo=turno.fondo, efectivo_cobrado=cobrado,
-                  esperado=turno.fondo + cobrado, cantidad_pagos=cantidad)
+    # El efectivo devuelto a clientes salió del cajón: baja lo esperado.
+    devuelto = Decimal(db.query(func.coalesce(func.sum(Devolucion.monto), 0)).filter(
+        Devolucion.turno_id == turno.id, Devolucion.medio == MedioPago.efectivo).scalar()).quantize(Decimal("0.01"))
+    return Arqueo(turno_id=turno.id, fondo=turno.fondo, efectivo_cobrado=cobrado, efectivo_devuelto=devuelto,
+                  esperado=turno.fondo + cobrado - devuelto, cantidad_pagos=cantidad)
 
 
 def cerrar_turno(db: Session, *, empresa_id: int, turno_id: int, usuario_id: int, contado,

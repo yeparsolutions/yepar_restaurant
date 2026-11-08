@@ -16,14 +16,14 @@ from models.inventario import (CategoriaItem, Extra, ExtraPlato, Item,
                                ItemPresentacion, LoteProduccion,
                                MovimientoStock, Receta, RecetaLinea,
                                ReservaStock, StockSucursal, Unidad)
-from models.caja import (Caja, ConfiguracionCobro, Pago, PropinaPorEntregar, TerminalPago,
+from models.caja import (Caja, ConfiguracionCobro, Devolucion, Pago, PropinaPorEntregar, TerminalPago,
                          TurnoCaja)
 from models.salon import (LineaExtra, LineaPedido, LineaQuitado, Mesa, Pedido,
                           TraspasoMesero)
 from models.tenant import Empresa, Sucursal, Usuario, UsuarioRol
 
 __all__ = [
-    "EstacionCocina", "EstadoPropina", "PropinaPorEntregar", "EstadoTurno", "MedioPago", "ModoPropina", "Caja", "ConfiguracionCobro", "Pago",
+    "EstacionCocina", "EstadoPropina", "PropinaPorEntregar", "EstadoTurno", "MedioPago", "ModoPropina", "Caja", "ConfiguracionCobro", "Devolucion", "Pago",
     "TerminalPago", "TurnoCaja", "EstadoLinea", "EstadoPedido", "LineaExtra", "LineaPedido", "LineaQuitado",
     "Mesa", "Pedido", "TraspasoMesero", "EstadoReserva", "ReservaStock", "FamiliaUnidad", "MotivoMerma", "RolUsuario", "TipoItem",
     "TipoMovimientoStock",

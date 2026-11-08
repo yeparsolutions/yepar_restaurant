@@ -7,7 +7,7 @@
 # cobra y cuenta el cajón al final del turno, y el dueño revisa que todo calce.
 # ============================================================
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Optional
 
@@ -15,16 +15,18 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from database import get_db
-from esquemas import (AbrirTurnoIn, ArqueoOut, CajaOut, ConfigCobroIn, ConfigCobroOut, CerrarTurnoIn,
+from esquemas import (CobradaOut, DevolucionIn, DevolucionOut, AbrirTurnoIn, ArqueoOut, CajaOut, ConfigCobroIn, ConfigCobroOut, CerrarTurnoIn,
                       CuadreTerminalOut, DescuentoIn, EntregaPropinaIn, EntregaPropinaOut, NombreIn, PagoIn,
                       PagoOut, ParteRepartoOut, PedidoOut, PropinaIn, PropinaLibroOut, RepartoIn,
                       ResumenPeriodoOut, SaldoPropinaOut, TerminalOut, TurnoConDiferenciaOut, TurnoOut)
-from models import EstadoPedido, EstadoPropina, MedioPago, ModoPropina, RolUsuario, Usuario
+from errores import ErrorNegocio, ErrorNoEncontrado
+from models import Pedido, EstadoPedido, EstadoPropina, MedioPago, ModoPropina, RolUsuario, Usuario
 from routers.comun import exigir_ser_el_mesero, pedido_out
 from seguridad import es_admin, exigir_roles, resolver_sucursal, roles_de
 from servicios import caja as svc_caja
 from servicios import cierre as svc_cierre
 from servicios import cobro as svc_cobro
+from servicios import devoluciones as svc_devoluciones
 from servicios import pedidos as svc_pedidos
 from servicios import propinas as svc_propinas
 from servicios.facturacion import emision as svc_facturacion
@@ -216,6 +218,66 @@ def pagar(pedido_id: str, datos: PagoIn, db: Session = Depends(get_db), usuario:
                    documento_folio=documento.folio if documento else None)
 
 
+# ── Devoluciones (reembolsos) ────────────────────────────────
+def _devolucion_out(d, nota: Optional[str] = None) -> DevolucionOut:
+    return DevolucionOut(id=d.id, pedido_id=d.pedido_id, medio=d.medio.value, monto=d.monto, motivo=d.motivo,
+                         numero_operacion=d.numero_operacion, turno_id=d.turno_id, usuario_id=d.usuario_id,
+                         autorizado_por_id=d.autorizado_por_id, creado_en=d.creado_en, nota_credito_estado=nota)
+
+
+@router.get("/cobradas", response_model=list[CobradaOut])
+def cobradas(horas: int = Query(default=24, ge=1, le=168), sucursal_id: Optional[int] = None,
+             db: Session = Depends(get_db), usuario: Usuario = Depends(solo_caja)):
+    """Cuentas cobradas en las últimas horas (para devolver dinero), con lo pagado y lo ya devuelto por medio."""
+    desde = datetime.now(timezone.utc) - timedelta(hours=horas)
+    pedidos = (db.query(Pedido).filter(Pedido.empresa_id == usuario.empresa_id,
+                                       Pedido.sucursal_id == resolver_sucursal(usuario, sucursal_id),
+                                       Pedido.estado == EstadoPedido.cerrado, Pedido.cerrado_en >= desde)
+               .order_by(Pedido.cerrado_en.desc()).limit(100).all())
+    salida = []
+    for p in pedidos:
+        cuenta = pedido_out(db, p)
+        salida.append(CobradaOut(pedido_id=p.id, mesa=cuenta.mesa, cerrado_en=p.cerrado_en, total=cuenta.cuenta.total,
+                                 pagado=svc_devoluciones.pagado_por_medio(db, p.id),
+                                 devuelto=svc_devoluciones.devuelto_por_medio(db, p.id)))
+    return salida
+
+
+@router.get("/pedidos/{pedido_id}/devoluciones", response_model=list[DevolucionOut])
+def ver_devoluciones(pedido_id: str, db: Session = Depends(get_db), usuario: Usuario = Depends(solo_caja)):
+    return [_devolucion_out(d) for d in svc_devoluciones.listar(db, empresa_id=usuario.empresa_id, pedido_id=pedido_id)]
+
+
+@router.post("/pedidos/{pedido_id}/devoluciones", response_model=DevolucionOut, status_code=201)
+def devolver(pedido_id: str, datos: DevolucionIn, db: Session = Depends(get_db), usuario: Usuario = Depends(solo_caja)):
+    """
+    Devuelve dinero al cliente de una cuenta cerrada (el cajero con el PIN de un supervisor). Con
+    `anular_documento` y devolviendo TODO lo cobrado, además se emite la nota de crédito de la boleta/factura.
+    La devolución queda firme aunque el facturador no responda: la nota se reintenta aparte.
+    """
+    dev = svc_devoluciones.devolver(
+        db, empresa_id=usuario.empresa_id, pedido_id=pedido_id, usuario_id=usuario.id, medio=MedioPago(datos.medio),
+        monto=datos.monto, motivo=datos.motivo, numero_operacion=datos.numero_operacion,
+        supervisor_id=datos.supervisor_id, pin_supervisor=datos.pin_supervisor)
+    db.commit()
+    nota = None
+    if datos.anular_documento:
+        pagado = sum(svc_devoluciones.pagado_por_medio(db, pedido_id).values())
+        devuelto = sum(svc_devoluciones.devuelto_por_medio(db, pedido_id).values())
+        nota = "no_aplica"                               # devolución parcial: la nota de crédito es por la cuenta completa
+        if devuelto >= pagado:
+            try:
+                doc = svc_facturacion.documento_de_pedido(db, empresa_id=usuario.empresa_id, pedido_id=pedido_id)
+                n = svc_facturacion.anular_documento(db, empresa_id=usuario.empresa_id, usuario_id=usuario.id,
+                                                     documento_id=doc.id, motivo=datos.motivo)
+                db.commit()
+                nota = n.estado.value
+            except (ErrorNegocio, ErrorNoEncontrado):
+                db.rollback()
+                nota = "no_disponible"
+    return _devolucion_out(dev, nota)
+
+
 # ── Propinas ─────────────────────────────────────────────────
 @router.get("/propinas", response_model=list[PropinaLibroOut])
 def libro(sucursal_id: Optional[int] = None, estado: Optional[EstadoPropina] = None,
@@ -285,5 +347,5 @@ def resumen(desde: datetime, hasta: datetime, sucursal_id: Optional[int] = None,
                                    desde=desde, hasta=hasta)
     return ResumenPeriodoOut(
         cerradas=r.cerradas, ventas=r.ventas, descuentos=r.descuentos, propinas=r.propinas,
-        total_cobrado=r.total_cobrado, por_medio=r.por_medio,
+        total_cobrado=r.total_cobrado, por_medio=r.por_medio, devoluciones=r.devoluciones,
         turnos_con_diferencia=[TurnoConDiferenciaOut(turno_id=t, diferencia=d) for t, d in r.turnos_con_diferencia])
