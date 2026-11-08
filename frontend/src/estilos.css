@@ -264,3 +264,7 @@ tr.fila-alerta td { background: var(--azul-suave); }
 .tabla-scroll { overflow-x: auto; border: 1px solid var(--borde); border-radius: var(--radio); background: var(--tarjeta); }
 .tabla-scroll table { display: table; border: 0; border-radius: 0; overflow: visible; }
 .tabla-scroll tr:last-child td { border-bottom: 0; }
+
+/* Líneas de factura / recepción */
+.linea-factura { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1.4fr) auto; gap: 6px; align-items: center; }
+@media (max-width: 560px) { .linea-factura { grid-template-columns: 1fr 1fr; } .linea-factura > :first-child { grid-column: 1 / -1; } }
