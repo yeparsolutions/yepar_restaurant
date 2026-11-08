@@ -57,7 +57,7 @@ export default function Inventario() {
       </div>
 
       {!filas ? <p className="suave">Cargando…</p> : visibles.length === 0 ? <p className="suave">No hay ítems que mostrar.</p> : (
-        <table>
+        <div className="tabla-scroll"><table>
           <thead><tr><th>Ítem</th><th>Tipo</th><th>Hay</th><th>Reservado</th><th>Disponible</th><th>Mínimo</th><th /></tr></thead>
           <tbody>
             {visibles.map((f) => {
@@ -70,15 +70,17 @@ export default function Inventario() {
                   <td>{cant(f.reservado)}</td>
                   <td>{cant(f.disponible)} {f.unidad}</td>
                   <td>{num(f.stock_minimo) > 0 ? `${cant(f.stock_minimo)} ${f.unidad}` : "—"}</td>
-                  <td className="acciones">
-                    <button className="secundario" onClick={() => { setAviso(""); setAccion({ tipo: "compra", fila: f }); }}>Ingresar</button>
-                    <button className="secundario" onClick={() => { setAviso(""); setAccion({ tipo: "merma", fila: f }); }}>Merma</button>
+                  <td>
+                    <div className="acciones-fila">
+                      <button className="secundario" onClick={() => { setAviso(""); setAccion({ tipo: "compra", fila: f }); }}>Ingresar</button>
+                      <button className="secundario" onClick={() => { setAviso(""); setAccion({ tipo: "merma", fila: f }); }}>Merma</button>
+                    </div>
                   </td>
                 </tr>
               );
             })}
           </tbody>
-        </table>
+        </table></div>
       )}
 
       <h2>Qué comprar</h2>

@@ -6,8 +6,8 @@
    - Archivos con huella (/assets/...): primero la copia guardada (nunca cambian).
    - Nunca toca la API (otro dominio) ni peticiones que no sean GET.
    ============================================================ */
-const VERSION = "yepar-v1";
-const BASE = ["/", "/manifest.webmanifest", "/favicon.ico", "/icon-192.png", "/Yepar_Restaurant_Isotipo.svg", "/Yepar_Restaurant_Logo.svg"];
+const VERSION = "yepar-v2";
+const BASE = ["/", "/manifest.webmanifest", "/favicon.ico", "/icon-192.png", "/Yepar_Restaurant_Isotipo.png", "/Yepar_Restaurant_Logo.png"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(
