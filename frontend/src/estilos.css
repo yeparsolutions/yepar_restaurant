@@ -250,3 +250,8 @@ legend { font-weight: 600; font-size: 0.875rem; padding: 0; margin-bottom: 4px; 
 .fila-mesa { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .fila-mesa input:first-child { flex: 1; min-width: 140px; }
 .fila-mesa input, .fila-mesa select { width: auto; }
+
+/* Inventario */
+tr.fila-alerta td { background: var(--violeta-suave); }
+.etiqueta-alerta { color: var(--violeta-fuerte); font-size: 0.8em; font-weight: 600; }
+td.acciones { display: flex; gap: 6px; justify-content: flex-end; }
