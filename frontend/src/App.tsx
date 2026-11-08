@@ -85,13 +85,13 @@ export function Marca({ grande = false }: { grande?: boolean }) {
   if (grande) {
     return (
       <div className="marca marca-grande">
-        <img src="/Yepar_Restaurant_Logo.svg" alt="Yepar Restaurant — Gestión integral para tu restaurant" />
+        <img src="/Yepar_Restaurant_Logo.png" alt="Yepar Restaurant — Gestión integral para tu restaurant" />
       </div>
     );
   }
   return (
     <div className="marca">
-      <img src="/Yepar_Restaurant_Isotipo.svg" alt="" width="26" height="31" />
+      <img src="/Yepar_Restaurant_Isotipo.png" alt="" width="26" height="31" />
       <span>Yepar Restaurant</span>
     </div>
   );
