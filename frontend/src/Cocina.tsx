@@ -8,6 +8,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { pedir, type Sesion } from "./api";
 import { Marca } from "./App";
 import { Dialogo } from "./Mesero";
+import { BotonRecepcion } from "./Recepcion";
 
 type Comanda = {
   linea_id: string; pedido_id: string; mesa: string; plato: string; cantidad: number; estado: string;
@@ -71,6 +72,7 @@ export default function Cocina({ sesion, alSalir }: { sesion: Sesion; alSalir: (
         <Marca />
         <span className="suave">{esBarra ? "Barra" : "Cocina"} · {sesion.usuario.nombre}</span>
         <span style={{ flex: 1 }} />
+        <BotonRecepcion />
         <button className="secundario" onClick={() => setAcabado(true)}>Se acabó…</button>
         <button className="secundario" onClick={alSalir}>Salir</button>
       </header>
