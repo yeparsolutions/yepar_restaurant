@@ -6,10 +6,11 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { descargar, ErrorApi, guardarSesion, pedir, type Sesion } from "./api";
 import { Marca } from "./App";
 import Configuracion from "./Configuracion";
+import Inventario from "./Inventario";
 import ResumenDia from "./Resumen";
 
-type Pestana = "resumen" | "inicio" | "carga" | "equipo" | "config";
-const PESTANAS: [Pestana, string][] = [["resumen", "Resumen"], ["inicio", "Arranque"], ["carga", "Carga por Excel"], ["equipo", "Equipo"], ["config", "Configuración"]];
+type Pestana = "resumen" | "inicio" | "inventario" | "carga" | "equipo" | "config";
+const PESTANAS: [Pestana, string][] = [["resumen", "Resumen"], ["inicio", "Arranque"], ["inventario", "Inventario"], ["carga", "Carga por Excel"], ["equipo", "Equipo"], ["config", "Configuración"]];
 
 export default function Panel({ sesion, alSalir }: { sesion: Sesion; alSalir: () => void }) {
   // Al entrar: con el arranque completo vas directo al resumen del día; si falta algo, al asistente.
@@ -40,6 +41,7 @@ export default function Panel({ sesion, alSalir }: { sesion: Sesion; alSalir: ()
         <AvisoCorreo sesion={sesion} />
         {pestana === "resumen" && <ResumenDia sesion={sesion} />}
         {pestana === "inicio" && <Inicio ir={setPestana} />}
+        {pestana === "inventario" && <Inventario />}
         {pestana === "carga" && <Carga />}
         {pestana === "equipo" && <Equipo />}
         {pestana === "config" && <Configuracion sesion={sesion} />}
