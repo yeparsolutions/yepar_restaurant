@@ -171,10 +171,9 @@ export function BotonConteo() {
   const [aviso, setAviso] = useState("");
   const revisar = useCallback(() => pedir<Hoja>("/inventario-fisico/activo").then(() => setHay(true)).catch(() => setHay(false)), []);
   useEffect(() => { revisar(); const t = setInterval(revisar, 30000); return () => clearInterval(t); }, [revisar]);
-  if (!hay && !aviso) return null;
   return (
     <>
-      {hay && <button className="secundario" onClick={() => { setAviso(""); setAbierto(true); }}>Contar inventario</button>}
+      <button className="secundario" onClick={() => { setAviso(""); setAbierto(true); }}>Contar inventario{hay ? " (abierto)" : ""}</button>
       {aviso && <span className="exito" role="status" style={{ padding: "4px 10px", borderRadius: 8 }}>{aviso}</span>}
       {abierto && <HojaConteo alCerrar={() => { setAbierto(false); revisar(); }} alTerminar={(m) => { setAbierto(false); setAviso(m); revisar(); }} />}
     </>
@@ -212,8 +211,8 @@ function HojaConteo({ alCerrar, alTerminar }: { alCerrar: () => void; alTerminar
   const visibles = (hoja?.lineas ?? []).filter((l) => l.item.toLowerCase().includes(busca.trim().toLowerCase()));
   return (
     <Dialogo titulo={hoja ? `Contar inventario (${hoja.contados}/${hoja.total_items})` : "Contar inventario"} alCerrar={alCerrar}>
-      {error && <p className="error" role="alert">{error}</p>}
-      {!hoja ? <p className="suave">Cargando…</p> : (
+      {error && hoja && <p className="error" role="alert">{error}</p>}
+      {!hoja ? <p className="suave">{error ? "No hay un conteo abierto. Cuando el administrador inicie un inventario, podrás contar aquí." : "Cargando…"}</p> : (
         <div style={{ display: "grid", gap: 8 }}>
           <p className="suave">Cuenta lo que hay en el estante y anota cada ítem. Si no hay nada, escribe 0.</p>
           <input type="search" placeholder="Buscar ítem…" aria-label="Buscar ítem" value={busca} onChange={(e) => setBusca(e.target.value)} />

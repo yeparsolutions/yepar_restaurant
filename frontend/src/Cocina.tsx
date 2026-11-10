@@ -10,6 +10,7 @@ import { Marca } from "./App";
 import { Dialogo } from "./Mesero";
 import { BotonConteo } from "./ConteoFisico";
 import { BotonRecepcion } from "./Recepcion";
+import { BotonInventario, BotonRecetas } from "./CocinaApoyo";
 
 type Comanda = {
   linea_id: string; pedido_id: string; mesa: string; plato: string; cantidad: number; estado: string;
@@ -73,6 +74,8 @@ export default function Cocina({ sesion, alSalir }: { sesion: Sesion; alSalir: (
         <Marca />
         <span className="suave">{esBarra ? "Barra" : "Cocina"} · {sesion.usuario.nombre}</span>
         <span style={{ flex: 1 }} />
+        <BotonRecetas />
+        <BotonInventario />
         <BotonRecepcion />
         <BotonConteo />
         <button className="secundario" onClick={() => setAcabado(true)}>Se acabó…</button>

@@ -265,6 +265,16 @@ def test_el_cocinero_ve_los_insumos_y_marca_lo_que_se_acabo(api):
     assert api.get("ana", "/cocina/items").status_code == 403           # el mesero no entra
 
 
+def test_el_cocinero_ve_el_recetario_y_abre_cada_receta_sin_costos(api):
+    r = api.get("chef", "/cocina/recetas")
+    assert r.status_code == 200
+    nombres = {x["nombre"] for x in r.json()}
+    assert "Hamburguesa" in nombres and "Carne" not in nombres        # solo lo que tiene receta
+    receta = api.get("chef", f"/items/{api.s['burger'].id}/receta").json()
+    assert receta["lineas"] and "costo_linea" not in str(receta)
+    assert api.get("ana", "/cocina/recetas").status_code == 403         # el mesero no entra
+
+
 def test_el_mesero_ve_a_quien_puede_pasarle_una_mesa_y_se_la_pasa(api):
     otros = api.get("ana", "/meseros").json()
     assert [m["nombre"] for m in otros] == ["Beto"]                       # no se lista a sí misma ni a cocina/caja

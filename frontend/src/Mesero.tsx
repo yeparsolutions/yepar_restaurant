@@ -305,11 +305,13 @@ function VistaPedido({ pedidoId, alVolver }: { pedidoId: string; alVolver: () =>
 
   // Todo lo que anota el mesero va a la libreta (cola): funciona igual con o sin red y se envía solo.
   const donde = enLinea ? "" : " Se enviará al volver la conexión.";
-  const agregar = (datos: { cantidad: number; comensal: number | null; sin: number[]; extras: number[]; nota: string }, plato: Plato) => {
-    encolar("tomar_linea", {
-      pedido_id: pedidoId, item_id: plato.item_id, cantidad: datos.cantidad, comensal: datos.comensal, sin_ingredientes: datos.sin,
-      extra_ids: datos.extras, nota: datos.nota || null, linea_id: nuevoId(),
-    });
+  const agregar = (partes: DatosPlato[], plato: Plato) => {
+    for (const datos of partes) {
+      encolar("tomar_linea", {
+        pedido_id: pedidoId, item_id: plato.item_id, cantidad: datos.cantidad, comensal: datos.comensal, sin_ingredientes: datos.sin,
+        extra_ids: datos.extras, nota: datos.nota || null, linea_id: nuevoId(),
+      });
+    }
     setElegido(null);
     setError("");
     // El semáforo viene de la carta que ya tiene la tablet: solo avisa, nunca bloquea.
@@ -504,43 +506,23 @@ function DialogoTraspaso({ alCerrar, alPasar }: { alCerrar: () => void; alPasar:
 }
 
 // ── Elegir cómo se prepara un plato ─────────────────────────
-function DialogoPlato({ plato, comensales, ocupado, alCerrar, alAgregar }: {
-  plato: Plato; comensales: number | null; ocupado: boolean; alCerrar: () => void;
-  alAgregar: (d: { cantidad: number; comensal: number | null; sin: number[]; extras: number[]; nota: string }) => void;
-}) {
-  const [cantidad, setCantidad] = useState(1);
-  const [comensal, setComensal] = useState<number | null>(null);
-  const [sin, setSin] = useState<number[]>([]);
-  const [extras, setExtras] = useState<number[]>([]);
-  const [nota, setNota] = useState("");
-  const alternar = (lista: number[], set: (x: number[]) => void, id: number) =>
-    set(lista.includes(id) ? lista.filter((x) => x !== id) : [...lista, id]);
-  const precioExtras = plato.extras.filter((e) => extras.includes(e.id)).reduce((s, e) => s + Number(e.precio ?? 0), 0);
-  const total = (Number(plato.precio_venta ?? 0) + precioExtras) * cantidad;
+type DatosPlato = { cantidad: number; comensal: number | null; sin: number[]; extras: number[]; nota: string };
+type Preparacion = { sin: number[]; extras: number[]; nota: string };
+const vacia = (): Preparacion => ({ sin: [], extras: [], nota: "" });
+const igual = (a: Preparacion, b: Preparacion) =>
+  a.nota === b.nota && [...a.sin].sort().join() === [...b.sin].sort().join() && [...a.extras].sort().join() === [...b.extras].sort().join();
 
+/** Quitar / agregar / nota de UNA preparación (una unidad, o todas si van iguales). */
+function OpcionesPlato({ plato, valor, alCambiar }: { plato: Plato; valor: Preparacion; alCambiar: (v: Preparacion) => void }) {
+  const alternar = (lista: number[], id: number) => (lista.includes(id) ? lista.filter((x) => x !== id) : [...lista, id]);
   return (
-    <Dialogo titulo={plato.nombre} alCerrar={alCerrar}>
-      {!plato.alcanza && <p className="error">Falta {plato.faltas.map((f) => f.nombre).join(", ")}. Puedes anotarlo igual, pero avisa al cliente.</p>}
-      <div className="fila-cant">
-        <button className="secundario" onClick={() => setCantidad(Math.max(1, cantidad - 1))} aria-label="Menos">−</button>
-        <strong aria-live="polite">{cantidad}</strong>
-        <button className="secundario" onClick={() => setCantidad(cantidad + 1)} aria-label="Más">+</button>
-      </div>
-      {comensales && comensales > 1 && (
-        <label className="campo">
-          <span>¿Para quién?</span>
-          <select value={comensal ?? ""} onChange={(e) => setComensal(e.target.value ? Number(e.target.value) : null)}>
-            <option value="">Para la mesa</option>
-            {Array.from({ length: comensales }, (_, i) => <option key={i} value={i + 1}>Persona {i + 1}</option>)}
-          </select>
-        </label>
-      )}
+    <>
       {plato.removibles.length > 0 && (
         <fieldset className="grupo">
           <legend>Quitar</legend>
           {plato.removibles.map((o) => (
             <label key={o.id} className="opcion">
-              <input type="checkbox" checked={sin.includes(o.id)} onChange={() => alternar(sin, setSin, o.id)} />
+              <input type="checkbox" checked={valor.sin.includes(o.id)} onChange={() => alCambiar({ ...valor, sin: alternar(valor.sin, o.id) })} />
               <span>Sin {o.nombre.toLowerCase()}</span>
             </label>
           ))}
@@ -551,7 +533,7 @@ function DialogoPlato({ plato, comensales, ocupado, alCerrar, alAgregar }: {
           <legend>Agregar</legend>
           {plato.extras.map((o) => (
             <label key={o.id} className="opcion">
-              <input type="checkbox" checked={extras.includes(o.id)} onChange={() => alternar(extras, setExtras, o.id)} />
+              <input type="checkbox" checked={valor.extras.includes(o.id)} onChange={() => alCambiar({ ...valor, extras: alternar(valor.extras, o.id) })} />
               <span>{o.nombre} <small>+{plata(o.precio)}</small></span>
             </label>
           ))}
@@ -559,9 +541,77 @@ function DialogoPlato({ plato, comensales, ocupado, alCerrar, alAgregar }: {
       )}
       <label className="campo">
         <span>Nota para cocina</span>
-        <input value={nota} maxLength={200} onChange={(e) => setNota(e.target.value)} placeholder="Ej: punto medio" />
+        <input value={valor.nota} maxLength={200} onChange={(e) => alCambiar({ ...valor, nota: e.target.value })} placeholder="Ej: punto medio" />
       </label>
-      <button disabled={ocupado} onClick={() => alAgregar({ cantidad, comensal, sin, extras, nota: nota.trim() })}>
+    </>
+  );
+}
+
+function DialogoPlato({ plato, comensales, ocupado, alCerrar, alAgregar }: {
+  plato: Plato; comensales: number | null; ocupado: boolean; alCerrar: () => void;
+  alAgregar: (partes: DatosPlato[]) => void;
+}) {
+  const [cantidad, setCantidad] = useState(1);
+  const [comensal, setComensal] = useState<number | null>(null);
+  const [comun, setComun] = useState<Preparacion>(vacia());          // cuando todas van iguales
+  const [distintas, setDistintas] = useState<Preparacion[] | null>(null);   // cuando cada unidad es distinta
+  const cambiarCantidad = (n: number) => {
+    setCantidad(n);
+    // Si ya se separaron, la lista sigue a la cantidad: las nuevas copian la preparación común.
+    setDistintas((d) => (d ? Array.from({ length: n }, (_, i) => d[i] ?? { ...comun }) : d));
+    if (n === 1) setDistintas(null);
+  };
+  const separar = () => setDistintas(Array.from({ length: cantidad }, () => ({ ...comun, sin: [...comun.sin], extras: [...comun.extras] })));
+
+  const unidades = distintas ?? Array.from({ length: cantidad }, () => comun);
+  const precioDe = (p: Preparacion) => Number(plato.precio_venta ?? 0) + plato.extras.filter((e) => p.extras.includes(e.id)).reduce((s, e) => s + Number(e.precio ?? 0), 0);
+  const total = unidades.reduce((t, p) => t + precioDe(p), 0);
+
+  // Las unidades idénticas se juntan en una sola línea ("2× sin cebolla"), las distintas van aparte.
+  const partes = (): DatosPlato[] => {
+    if (!distintas) return [{ cantidad, comensal, ...comun, nota: comun.nota.trim() }];
+    const grupos: { p: Preparacion; n: number }[] = [];
+    for (const p of distintas) {
+      const g = grupos.find((x) => igual(x.p, p));
+      if (g) g.n += 1; else grupos.push({ p, n: 1 });
+    }
+    return grupos.map(({ p, n }) => ({ cantidad: n, comensal, sin: p.sin, extras: p.extras, nota: p.nota.trim() }));
+  };
+
+  return (
+    <Dialogo titulo={plato.nombre} alCerrar={alCerrar}>
+      {!plato.alcanza && <p className="error">Falta {plato.faltas.map((f) => f.nombre).join(", ")}. Puedes anotarlo igual, pero avisa al cliente.</p>}
+      <div className="fila-cant">
+        <button className="secundario" onClick={() => cambiarCantidad(Math.max(1, cantidad - 1))} aria-label="Menos">−</button>
+        <strong aria-live="polite">{cantidad}</strong>
+        <button className="secundario" onClick={() => cambiarCantidad(cantidad + 1)} aria-label="Más">+</button>
+      </div>
+      {comensales && comensales > 1 && (
+        <label className="campo">
+          <span>¿Para quién?</span>
+          <select value={comensal ?? ""} onChange={(e) => setComensal(e.target.value ? Number(e.target.value) : null)}>
+            <option value="">Para la mesa</option>
+            {Array.from({ length: comensales }, (_, i) => <option key={i} value={i + 1}>Persona {i + 1}</option>)}
+          </select>
+        </label>
+      )}
+      {distintas ? (
+        distintas.map((p, i) => (
+          <section key={i} className="grupo" aria-label={`${plato.nombre} ${i + 1}`}>
+            <strong>{plato.nombre} {i + 1} de {cantidad}</strong>
+            <OpcionesPlato plato={plato} valor={p} alCambiar={(v) => setDistintas(distintas.map((x, j) => (j === i ? v : x)))} />
+          </section>
+        ))
+      ) : (
+        <>
+          <OpcionesPlato plato={plato} valor={comun} alCambiar={setComun} />
+          {cantidad > 1 && (plato.removibles.length > 0 || plato.extras.length > 0) && (
+            <button className="secundario" onClick={separar}>Cada uno es distinto (ej. uno sin cebolla)</button>
+          )}
+        </>
+      )}
+      {distintas && <button className="secundario" onClick={() => { setComun({ ...distintas[0] }); setDistintas(null); }}>Todos iguales</button>}
+      <button disabled={ocupado} onClick={() => alAgregar(partes())}>
         Anotar · {plata(total)}
       </button>
     </Dialogo>
