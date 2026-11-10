@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from database import get_db
-from esquemas import AgotadoOut, ComandaOut, InsumoCocinaOut, LineaOut, ListoOut
+from esquemas import AgotadoOut, ComandaOut, InsumoCocinaOut, LineaOut, ListoOut, RecetaCocinaOut
 from models import EstacionCocina, Item, RolUsuario, TipoItem, Usuario
 from routers.comun import linea_out
 from seguridad import exigir_roles, resolver_sucursal
@@ -61,6 +61,19 @@ def insumos(db: Session = Depends(get_db), usuario: Usuario = Depends(solo_cocin
              .order_by(Item.nombre).all())
     lista = [InsumoCocinaOut(item_id=i.id, nombre=i.nombre, agotado=bool(i.agotado_manual)) for i in items]
     return sorted(lista, key=lambda x: not x.agotado)
+
+
+@router.get("/recetas", response_model=list[RecetaCocinaOut])
+def recetas(db: Session = Depends(get_db), usuario: Usuario = Depends(solo_cocina)):
+    """
+    El recetario: platos y preparaciones que tienen receta, para que un cocinero nuevo sepa cómo se arman.
+    Cada una se abre con GET /items/{id}/receta (ingredientes y cantidades, sin costos).
+    """
+    items = (db.query(Item)
+             .filter(Item.empresa_id == usuario.empresa_id, Item.activo.is_(True),
+                     Item.tipo.in_((TipoItem.vendible_preparado, TipoItem.componente)))
+             .order_by(Item.nombre).all())
+    return [RecetaCocinaOut(item_id=i.id, nombre=i.nombre, tipo=i.tipo.value) for i in items if i.receta is not None]
 
 
 @router.post("/items/{item_id}/agotado", response_model=AgotadoOut)

@@ -291,6 +291,13 @@ class ListoOut(BaseModel):
     sin_stock: list[str]                  # ingredientes que quedaron en negativo
 
 
+class RecetaCocinaOut(BaseModel):
+    """Una fila de la lista de recetas del cocinero: qué plato o preparación tiene receta (sin costos)."""
+    item_id: int
+    nombre: str
+    tipo: str
+
+
 class InsumoCocinaOut(BaseModel):
     """Algo que el cocinero puede marcar como 'se acabó' (o volver a marcar como disponible)."""
     item_id: int

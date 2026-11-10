@@ -14,17 +14,16 @@ type LineaCiega = { linea_id: number | null; item_id: number; item: string; unid
 type Hoja = { id: number; proveedor: string; lineas: LineaCiega[] };
 type Conteo = { cantidad: string; unidad: string };   // unidad: "" = base, o el id de la presentación
 
-/** Botón + diálogo de recepción para la pantalla de cocina. Se muestra solo si hay mercadería por recibir. */
+/** Botón + diálogo de recepción para la pantalla de cocina. Se ve siempre; sin pedidos por recibir lo explica. */
 export function BotonRecepcion() {
   const [pendientes, setPendientes] = useState<Pendiente[]>([]);
   const [abierto, setAbierto] = useState(false);
   const [aviso, setAviso] = useState("");
   const cargar = useCallback(() => pedir<Pendiente[]>("/compras/por-recibir").then(setPendientes).catch(() => {}), []);
   useEffect(() => { cargar(); const t = setInterval(cargar, 30000); return () => clearInterval(t); }, [cargar]);
-  if (pendientes.length === 0 && !aviso) return null;
   return (
     <>
-      {pendientes.length > 0 && <button className="secundario" onClick={() => { setAviso(""); setAbierto(true); }}>Recibir mercadería ({pendientes.length})</button>}
+      <button className="secundario" onClick={() => { setAviso(""); setAbierto(true); }}>Recibir mercadería{pendientes.length > 0 ? ` (${pendientes.length})` : ""}</button>
       {aviso && <span className="exito" role="status" style={{ padding: "4px 10px", borderRadius: 8 }}>{aviso}</span>}
       {abierto && <Recepcion pendientes={pendientes} alCerrar={() => setAbierto(false)} alTerminar={(m) => { setAbierto(false); setAviso(m); cargar(); }} />}
     </>
@@ -64,7 +63,9 @@ function Recepcion({ pendientes, alCerrar, alTerminar }: { pendientes: Pendiente
   return (
     <Dialogo titulo={hoja ? `Recibir de ${hoja.proveedor}` : "Mercadería por recibir"} alCerrar={alCerrar}>
       {error && <p className="error" role="alert">{error}</p>}
-      {!hoja ? (
+      {!hoja && pendientes.length === 0 ? (
+        <p className="suave">No hay mercadería por recibir. Cuando el administrador registre una compra, aparecerá aquí para que cuentes lo que llegó.</p>
+      ) : !hoja ? (
         <ul className="lineas">
           {pendientes.map((p) => (
             <li key={p.id} className="linea">
