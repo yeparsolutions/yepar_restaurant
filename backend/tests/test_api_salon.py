@@ -265,6 +265,21 @@ def test_el_cocinero_ve_los_insumos_y_marca_lo_que_se_acabo(api):
     assert api.get("ana", "/cocina/items").status_code == 403           # el mesero no entra
 
 
+def test_la_cuenta_pedida_se_ve_aunque_queden_platos_listos_por_entregar(api):
+    pedido = abrir_mesa(api)
+    plato = tomar(api, pedido["id"])
+    assert api.post("ana", f"/pedidos/{pedido['id']}/enviar").status_code == 200
+    lid = plato["linea"]["id"]
+    api.post("chef", f"/cocina/lineas/{lid}/iniciar")
+    api.post("chef", f"/cocina/lineas/{lid}/lista")
+    assert api.post("ana", f"/pedidos/{pedido['id']}/cuenta").status_code == 200
+    mesa = {m["nombre"]: m for m in api.get("cajera", "/mesas").json()}["Mesa 1"]
+    assert mesa["estado"] == "lista"              # lo urgente sigue siendo retirar el plato...
+    assert mesa["cuenta_pedida"] is True          # ...pero la caja ya sabe que pidieron la cuenta
+    otra = {m["nombre"]: m for m in api.get("cajera", "/mesas").json()}["Mesa 2"]
+    assert otra["cuenta_pedida"] is False
+
+
 def test_el_cocinero_ve_el_recetario_y_abre_cada_receta_sin_costos(api):
     r = api.get("chef", "/cocina/recetas")
     assert r.status_code == 200

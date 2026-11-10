@@ -17,7 +17,9 @@ import {
 type Turno = { id: number; caja: string; fondo: string; abierto_en: string | null };
 type CajaT = { id: number; nombre: string };
 type Terminal = { id: number; nombre: string };
-type Mesa = { mesa_id: number; nombre: string; estado: string; pedido_id: string | null };
+type Mesa = { mesa_id: number; nombre: string; estado: string; pedido_id: string | null; cuenta_pedida?: boolean };
+/** ¿Pidió la cuenta? Un plato "lista" por entregar no la esconde (las listas guardadas antes no traen el campo). */
+const pidioCuenta = (m: Mesa) => m.cuenta_pedida ?? m.estado === "cuenta_pedida";
 type Cuenta = { subtotal: string; descuento: string; propina: string; total: string; pagado: string; pendiente: string };
 type Linea = { id: string; nombre: string; cantidad: number; estado: string; total: string };
 type Pedido = { id: string; mesa: string | null; estado: string; lineas: Linea[]; cuenta: Cuenta };
@@ -176,7 +178,7 @@ function PorCobrar({ alAbrir }: { alAbrir: (pedidoId: string) => void }) {
       setMesas(m);
       setError("");
       // Se guarda cada cuenta pedida para poder cobrarla aunque se caiga la red antes de abrirla.
-      m.filter((x) => x.pedido_id && x.estado === "cuenta_pedida").forEach((x) => {
+      m.filter((x) => x.pedido_id && pidioCuenta(x)).forEach((x) => {
         pedir<Pedido>(`/pedidos/${x.pedido_id}`).then((p) => guardarCache("caja_pedido_" + x.pedido_id, p)).catch(() => {});
       });
     } catch (e: any) {
@@ -191,7 +193,7 @@ function PorCobrar({ alAbrir }: { alAbrir: (pedidoId: string) => void }) {
   }, [cargar]);
 
   if (!mesas) return <p className="suave">{error || "Cargando…"}</p>;
-  const conCuenta = mesas.filter((m) => m.pedido_id && (todas || m.estado === "cuenta_pedida"));
+  const conCuenta = mesas.filter((m) => m.pedido_id && (todas || pidioCuenta(m)));
   return (
     <>
       <div className="encabezado">
@@ -207,10 +209,10 @@ function PorCobrar({ alAbrir }: { alAbrir: (pedidoId: string) => void }) {
       ) : (
         <div className="carta">
           {conCuenta.map((m) => (
-            <button key={m.mesa_id} className={`plato ${m.estado === "cuenta_pedida" ? "falta" : ""}`} onClick={() => alAbrir(m.pedido_id!)}>
+            <button key={m.mesa_id} className={`plato ${pidioCuenta(m) ? "falta" : ""}`} onClick={() => alAbrir(m.pedido_id!)}>
               <strong>{m.nombre}</strong>
               <small>
-                {cola.some((p) => p.pedido_id === m.pedido_id) ? "Cobro por enviar" : m.estado === "cuenta_pedida" ? "Pidió la cuenta" : "Abierta"}
+                {cola.some((p) => p.pedido_id === m.pedido_id) ? "Cobro por enviar" : pidioCuenta(m) ? "Pidió la cuenta" : "Abierta"}
               </small>
             </button>
           ))}

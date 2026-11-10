@@ -143,6 +143,7 @@ class EstadoMesaOut(BaseModel):
     ancho: int = 80
     alto: int = 80
     forma: str = "cuadrada"
+    cuenta_pedida: bool = False       # el cliente ya pidió la cuenta (aunque queden platos "lista" por entregar)
 
 
 # ── Carta y disponibilidad ───────────────────────────────────
