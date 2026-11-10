@@ -189,6 +189,20 @@ class AbrirPedidoIn(Entrada):
     sucursal_id: Optional[int] = None
 
 
+class PedidoSinMesaOut(BaseModel):
+    """Una cuenta para llevar / delivery (sin mesa) que sigue abierta o esperando cobro."""
+    pedido_id: str
+    estado: str                              # abierto | cuenta_pedida
+    mesero_id: Optional[int] = None
+    mesero: Optional[str] = None
+    lineas: int
+    total: Dinero
+    despacho_estado: Optional[str] = None    # pendiente | creado | rechazado (si se pidió reparto)
+    go_numero: Optional[str] = None
+    estado_go: Optional[str] = None
+    seguimiento_url: Optional[str] = None
+
+
 class TomarLineaIn(Entrada):
     item_id: int
     cantidad: int = 1

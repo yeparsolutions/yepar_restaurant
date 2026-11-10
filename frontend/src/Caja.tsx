@@ -9,6 +9,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ErrorApi, pedir, type Sesion } from "./api";
 import { Marca } from "./App";
 import { Dialogo, nuevoId, plata } from "./Mesero";
+import { Entregas, PanelDespacho, textoDespacho } from "./Despacho";
 import { guardarCache, leerCache } from "./sinConexion";
 import {
   anotarPago, descartarRechazados, colaActual, enviarPagos, fijarCajero, iniciarPagos, pendienteDeEnvio, usePagosSinConexion,
@@ -25,6 +26,7 @@ type Pago = { vuelto: string | null; pedido_estado: string; documento_estado: st
 type Supervisor = { id: number; nombre: string };
 type Saldo = { mesero_id: number | null; nombre: string | null; monto: string };
 type Cobrada = { pedido_id: string; mesa: string | null; cerrado_en: string | null; total: string; pagado: Record<string, string>; devuelto: Record<string, string> };
+type SinMesa = { pedido_id: string; estado: string; total: string; despacho_estado: string | null; estado_go: string | null };
 type Arqueo = { fondo: string; efectivo_cobrado: string; esperado: string; cantidad_pagos: number };
 
 const num = (v: string | number | null | undefined) => Number(v ?? 0);
@@ -43,7 +45,7 @@ export default function Caja({ sesion, alSalir }: { sesion: Sesion; alSalir: () 
   const [turno, setTurno] = useState<Turno | null | undefined>(undefined); // undefined = cargando
   const [error, setError] = useState("");
   const [cerrando, setCerrando] = useState(false);
-  const [vista, setVista] = useState<"cobrar" | "cobradas" | "propinas">("cobrar");
+  const [vista, setVista] = useState<"cobrar" | "cobradas" | "entregas" | "propinas">("cobrar");
   const [pedidoId, setPedidoId] = useState<string | null>(null);
   useState(() => fijarCajero(sesion.usuario.id));            // la copia local ya está disponible en la primera pantalla
   useEffect(() => { iniciarPagos(sesion.usuario.id); }, [sesion.usuario.id]);
@@ -90,10 +92,12 @@ export default function Caja({ sesion, alSalir }: { sesion: Sesion; alSalir: () 
             <nav className="pestanas" aria-label="Caja">
               <button className={`pestana ${vista === "cobrar" ? "activa" : ""}`} onClick={() => setVista("cobrar")}>Cobrar</button>
               <button className={`pestana ${vista === "cobradas" ? "activa" : ""}`} onClick={() => setVista("cobradas")}>Cobradas</button>
+              <button className={`pestana ${vista === "entregas" ? "activa" : ""}`} onClick={() => setVista("entregas")}>Entregas</button>
               <button className={`pestana ${vista === "propinas" ? "activa" : ""}`} onClick={() => setVista("propinas")}>Propinas</button>
             </nav>
             {vista === "cobrar" ? <PorCobrar alAbrir={setPedidoId} />
               : vista === "cobradas" ? <Cobradas esAdmin={sesion.usuario.roles.includes("administrador")} />
+              : vista === "entregas" ? <Entregas />
               : <Propinas />}
           </>
         )}
@@ -169,8 +173,16 @@ function PorCobrar({ alAbrir }: { alAbrir: (pedidoId: string) => void }) {
   const [error, setError] = useState("");
   const [todas, setTodas] = useState(false);
   const { cola } = usePagosSinConexion();
+  const [paraLlevar, setParaLlevar] = useState<SinMesa[]>(() => leerCache<SinMesa[]>("sin_mesa") ?? []);
   const cargar = useCallback(async () => {
     try {
+      const llevar = await pedir<SinMesa[]>("/pedidos-sin-mesa").catch(() => null);
+      if (llevar) {
+        guardarCache("sin_mesa", llevar); setParaLlevar(llevar);
+        llevar.filter((x) => x.estado === "cuenta_pedida").forEach((x) => {
+          pedir<Pedido>(`/pedidos/${x.pedido_id}`).then((p) => guardarCache("caja_pedido_" + x.pedido_id, p)).catch(() => {});
+        });
+      }
       const m = await pedir<Mesa[]>("/mesas");
       guardarCache("mesas", m);
       setMesas(m);
@@ -192,6 +204,7 @@ function PorCobrar({ alAbrir }: { alAbrir: (pedidoId: string) => void }) {
 
   if (!mesas) return <p className="suave">{error || "Cargando…"}</p>;
   const conCuenta = mesas.filter((m) => m.pedido_id && (todas || m.estado === "cuenta_pedida"));
+  const llevar = paraLlevar.filter((p) => todas || p.estado === "cuenta_pedida");
   return (
     <>
       <div className="encabezado">
@@ -202,10 +215,16 @@ function PorCobrar({ alAbrir }: { alAbrir: (pedidoId: string) => void }) {
         </label>
       </div>
       {error && <p className="error" role="alert">{error}</p>}
-      {conCuenta.length === 0 ? (
+      {conCuenta.length === 0 && llevar.length === 0 ? (
         <p className="suave">No hay cuentas pedidas. Cuando un mesero pida la cuenta, aparecerá aquí.</p>
       ) : (
         <div className="carta">
+          {llevar.map((p) => (
+            <button key={p.pedido_id} className={`plato ${p.estado === "cuenta_pedida" ? "falta" : ""}`} onClick={() => alAbrir(p.pedido_id)}>
+              <strong>Para llevar</strong>
+              <small>{plata(p.total)} · {cola.some((c) => c.pedido_id === p.pedido_id) ? "Cobro por enviar" : p.despacho_estado ? textoDespacho({ estado: p.despacho_estado, estado_go: p.estado_go }) : p.estado === "cuenta_pedida" ? "Pidió la cuenta" : "Abierta"}</small>
+            </button>
+          ))}
           {conCuenta.map((m) => (
             <button key={m.mesa_id} className={`plato ${m.estado === "cuenta_pedida" ? "falta" : ""}`} onClick={() => alAbrir(m.pedido_id!)}>
               <strong>{m.nombre}</strong>
@@ -317,7 +336,7 @@ function Cobro({ pedidoId, alVolver }: { pedidoId: string; alVolver: () => void 
     <div className="pedido-grid">
       <section>
         <div className="encabezado">
-          <h1>{pedido.mesa ?? "Cuenta"}</h1>
+          <h1>{pedido.mesa ?? "Para llevar"}</h1>
           <button className="secundario" onClick={alVolver}>← Cuentas</button>
         </div>
         <ul className="lineas">
@@ -348,7 +367,8 @@ function Cobro({ pedidoId, alVolver }: { pedidoId: string; alVolver: () => void 
           </div>
         ) : (
           <>
-            <h2 style={{ marginTop: 0 }}>Propina y descuento</h2>
+            {!pedido.mesa && <PanelDespacho pedidoId={pedidoId} />}
+            <h2>Propina y descuento</h2>
             <div className="acciones">
               <button className="secundario" disabled={ocupado} onClick={() => propina(null)}>Sugerida ({pctSugerido}%)</button>
               <button className="secundario" disabled={ocupado} onClick={() => propina(0)}>Sin propina</button>

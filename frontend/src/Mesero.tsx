@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ErrorApi, pedir, type Sesion } from "./api";
 import { Marca } from "./App";
+import { PanelDespacho, textoDespacho } from "./Despacho";
 import { plata } from "./dinero";
 import {
   descartarRechazadas, descartarSiNoSalio, encolar, fijarUsuario, guardarCache, iniciarSinConexion, leerCache, nuevoId, useSinConexion,
@@ -17,6 +18,7 @@ export { nuevoId };
 
 // ── Tipos que devuelve la API ───────────────────────────────
 type EstadoMesa = "libre" | "ocupada" | "lista" | "cuenta_pedida";
+type SinMesa = { pedido_id: string; estado: string; lineas: number; total: string; despacho_estado: string | null; estado_go: string | null; seguimiento_url: string | null };
 type Mesa = {
   mesa_id: number; nombre: string; estado: EstadoMesa; pedido_id: string | null; lineas_listas: number;
   capacidad: number | null; pos_x: number | null; pos_y: number | null; ancho: number | null; alto: number | null; forma: string | null;
@@ -183,6 +185,19 @@ function Plano({ alAbrir }: { alAbrir: (pedidoId: string) => void }) {
   // Cuando la cola termina de sincronizar, se vuelve a pedir el plano para ver el estado real.
   useEffect(() => { cargar(); }, [cola.length, cargar]);
 
+  // Cuentas para llevar / delivery (sin mesa): se listan aparte del plano.
+  const [paraLlevar, setParaLlevar] = useState<SinMesa[]>(() => leerCache<SinMesa[]>("sin_mesa") ?? []);
+  const cargarParaLlevar = useCallback(async () => {
+    try { const l = await pedir<SinMesa[]>("/pedidos-sin-mesa"); guardarCache("sin_mesa", l); setParaLlevar(l); } catch { /* sin red: se sigue con la última lista */ }
+  }, []);
+  useEffect(() => { cargarParaLlevar(); }, [cargarParaLlevar, cola.length]);
+  useEffect(() => { const t = setInterval(cargarParaLlevar, 10000); return () => clearInterval(t); }, [cargarParaLlevar]);
+  const nuevaParaLlevar = () => {
+    const id = nuevoId();
+    encolar("abrir_pedido", { mesa_id: null, comensales: null, pedido_id: id });
+    alAbrir(id);
+  };
+
   // Abrir una mesa se anota en la libreta: funciona igual con o sin red.
   const abrir = (mesa: Mesa, n: number | null) => {
     const id = nuevoId();
@@ -230,6 +245,26 @@ function Plano({ alAbrir }: { alAbrir: (pedidoId: string) => void }) {
             ))}
           </div>
         </div>
+      )}
+      <h2>Para llevar y delivery</h2>
+      <div className="acciones">
+        <button onClick={nuevaParaLlevar}>+ Nueva cuenta para llevar</button>
+      </div>
+      {paraLlevar.length > 0 && (
+        <ul className="lineas">
+          {paraLlevar.map((p) => (
+            <li key={p.pedido_id} className="linea">
+              <div>
+                <strong>Para llevar · {plata(p.total)}</strong>
+                <div className="suave">
+                  {p.lineas} plato{p.lineas === 1 ? "" : "s"} · {p.estado === "cuenta_pedida" ? "Cuenta pedida" : "Abierta"}
+                  {p.despacho_estado ? ` · ${textoDespacho({ estado: p.despacho_estado, estado_go: p.estado_go })}` : ""}
+                </div>
+              </div>
+              <button className="secundario" onClick={() => alAbrir(p.pedido_id)}>Abrir</button>
+            </li>
+          ))}
+        </ul>
       )}
       {comensales && (
         <Dialogo titulo={`Abrir ${comensales.nombre}`} alCerrar={() => setComensales(null)}>
@@ -358,7 +393,7 @@ function VistaPedido({ pedidoId, alVolver }: { pedidoId: string; alVolver: () =>
     <div className="pedido-grid">
       <section>
         <div className="encabezado">
-          <h1>{pedido.mesa ?? "Pedido"}{pedido.comensales ? ` · ${pedido.comensales} pers.` : ""}</h1>
+          <h1>{pedido.mesa ?? "Para llevar"}{pedido.comensales ? ` · ${pedido.comensales} pers.` : ""}</h1>
           <button className="secundario" onClick={alVolver}>← Mesas</button>
         </div>
         {error && <p className="error" role="alert">{error}</p>}
@@ -401,9 +436,10 @@ function VistaPedido({ pedidoId, alVolver }: { pedidoId: string; alVolver: () =>
         ) : (
           <p className="suave">Esta cuenta está en estado «{pedido.estado}».</p>
         )}
+        {!pedido.mesa && (abierto || pedido.estado === "cuenta_pedida") && enLinea && <PanelDespacho pedidoId={pedidoId} />}
         {(abierto || pedido.estado === "cuenta_pedida") && (
           <div className="acciones">
-            <button className="secundario" onClick={() => setTraspaso(true)}>Pasar mesa a otro mesero</button>
+            <button className="secundario" onClick={() => setTraspaso(true)}>Pasar {pedido.mesa ? "mesa" : "cuenta"} a otro mesero</button>
             {abierto && <button className="secundario" disabled={pedido.lineas.some((l) => !["tomada", "cancelada"].includes(l.estado))} onClick={anularPedido}>Anular pedido</button>}
           </div>
         )}

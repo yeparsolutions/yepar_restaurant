@@ -15,11 +15,11 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from esquemas import (AbrirPedidoIn, EnvioOut, EstadoMesaOut, MesaEditIn, FaltanteOut, ItemCartaOut, LineaOut, MeseroOut, OpcionCartaOut,
-                      MesaIn, MesaOut, PedidoOut, PosicionIn, RetiroOut, TomarLineaIn, TomarLineaOut,
+                      MesaIn, MesaOut, PedidoOut, PedidoSinMesaOut, PosicionIn, RetiroOut, TomarLineaIn, TomarLineaOut,
                       TraspasoIn)
-from models import Extra, ExtraPlato, Item, RecetaLinea, RolUsuario, Usuario
+from models import Despacho, EstadoPedido, Extra, ExtraPlato, Item, Pedido, RecetaLinea, RolUsuario, Usuario
 from routers.comun import (disponibilidad_out, exigir_ser_el_mesero, linea_out, pedido_out)
-from seguridad import exigir_roles, resolver_sucursal, roles_de
+from seguridad import es_admin, exigir_roles, resolver_sucursal, roles_de
 from servicios import cocina as svc_cocina
 from servicios import mesas as svc_mesas
 from servicios import pedidos as svc_pedidos
@@ -113,6 +113,29 @@ def carta(sucursal_id: Optional[int] = Query(default=None), db: Session = Depend
 
 
 # ── Pedidos ──────────────────────────────────────────────────
+@router.get("/pedidos-sin-mesa", response_model=list[PedidoSinMesaOut])
+def pedidos_sin_mesa(sucursal_id: Optional[int] = Query(default=None), db: Session = Depends(get_db),
+                     usuario: Usuario = Depends(solo_personal_de_sala)):
+    """Cuentas para llevar / delivery abiertas del local. El mesero ve las suyas; el cajero y el administrador, todas."""
+    q = db.query(Pedido).filter(Pedido.empresa_id == usuario.empresa_id,
+                                Pedido.sucursal_id == resolver_sucursal(usuario, sucursal_id),
+                                Pedido.mesa_id.is_(None),
+                                Pedido.estado.in_((EstadoPedido.abierto, EstadoPedido.cuenta_pedida)))
+    if RolUsuario.cajero not in roles_de(usuario) and not es_admin(usuario):
+        q = q.filter(Pedido.mesero_id == usuario.id)
+    salida = []
+    for p in q.order_by(Pedido.abierto_en).all():
+        c = pedido_out(db, p)
+        d = db.query(Despacho).filter_by(pedido_id=p.id).one_or_none()
+        mesero = db.get(Usuario, p.mesero_id) if p.mesero_id else None
+        salida.append(PedidoSinMesaOut(
+            pedido_id=p.id, estado=p.estado.value, mesero_id=p.mesero_id, mesero=mesero.nombre if mesero else None,
+            lineas=sum(1 for l in c.lineas if l.estado != "cancelada"), total=c.cuenta.total,
+            despacho_estado=d.estado.value if d else None, go_numero=d.go_numero if d else None,
+            estado_go=d.estado_go if d else None, seguimiento_url=d.seguimiento_url if d else None))
+    return salida
+
+
 @router.post("/pedidos", response_model=PedidoOut, status_code=201)
 def abrir_pedido(datos: AbrirPedidoIn, db: Session = Depends(get_db), usuario: Usuario = Depends(solo_mesero)):
     """El mesero se ancla a una mesa libre y abre la cuenta."""

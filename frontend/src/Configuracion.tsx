@@ -39,6 +39,7 @@ export default function Configuracion({ sesion }: { sesion: Sesion }) {
       <Propina />
       <PinSupervisor />
       <Facturador />
+      <YeparGo />
     </section>
   );
 }
@@ -445,6 +446,84 @@ function Facturador() {
   );
 }
 
+
+// ── Delivery con Yepar Go ─────────────────────────────────────
+type ConexionGo = { activo: boolean; api_key_final: string; direccion_retiro: string | null; centro_retiro_id: string | null };
+function YeparGo() {
+  const [con, setCon] = useState<ConexionGo | null>(null);
+  const [cargado, setCargado] = useState(false);
+  const [clave, setClave] = useState("");
+  const [retiro, setRetiro] = useState("");
+  const [msg, setMsg] = useState<{ ok: boolean; texto: string } | null>(null);
+  const [ocupado, setOcupado] = useState(false);
+
+  const cargar = useCallback(async () => {
+    try {
+      setCon(await pedir<ConexionGo>("/despacho/conexion"));
+    } catch (e) {
+      // Sin Yepar Go la API responde 404 ("no tiene Yepar Go conectado"): es un estado normal, no un fallo.
+      if (e instanceof ErrorApi && e.estado === 404) setCon(null);
+      else setMsg({ ok: false, texto: (e as Error).message });
+    } finally {
+      setCargado(true);
+    }
+  }, []);
+  useEffect(() => { cargar(); }, [cargar]);
+
+  async function conectar(e: FormEvent) {
+    e.preventDefault();
+    setMsg(null);
+    setOcupado(true);
+    try {
+      setCon(await pedir<ConexionGo>("/despacho/conexion", { metodo: "PUT", json: { api_key: clave.trim(), direccion_retiro: retiro.trim() || null } }));
+      setClave("");
+      setMsg({ ok: true, texto: "Yepar Go conectado." });
+    } catch (err) {
+      setMsg({ ok: false, texto: (err as Error).message });
+    } finally {
+      setOcupado(false);
+    }
+  }
+  async function desconectar() {
+    if (!confirm("¿Desconectar Yepar Go? No se podrán pedir repartos hasta volver a conectarlo.")) return;
+    try {
+      await pedir("/despacho/conexion", { metodo: "DELETE" });
+      setCon(null);
+      setMsg(null);
+    } catch (err) {
+      setMsg({ ok: false, texto: (err as Error).message });
+    }
+  }
+
+  return (
+    <div className="bloque">
+      <h2>Delivery con Yepar Go</h2>
+      <p className="suave">Conecta tu cuenta de Yepar Go con su API Key para pedir motoristas desde la caja o la tablet del mesero. Se guarda cifrada.</p>
+      {!cargado ? <p className="suave">Cargando…</p> : con && con.activo ? (
+        <div className="formulario">
+          <p><span className="chip">Conectado</span> clave {con.api_key_final}</p>
+          <p className="suave">Retiro en: {con.direccion_retiro ?? "el centro de retiro de tu cuenta de Yepar Go"}</p>
+          <button className="secundario" onClick={desconectar}>Desconectar</button>
+          {msg && <p className={msg.ok ? "exito" : "error"} role="status">{msg.texto}</p>}
+        </div>
+      ) : (
+        <form className="formulario" onSubmit={conectar}>
+          <label className="campo">
+            <span>API Key de Yepar Go</span>
+            <input type="password" value={clave} onChange={(e) => setClave(e.target.value)} autoComplete="off" required />
+          </label>
+          <label className="campo">
+            <span>Dirección de retiro (tu local)</span>
+            <input value={retiro} onChange={(e) => setRetiro(e.target.value)} maxLength={300} placeholder="Calle y número, comuna" />
+            <small>Dónde pasa el motorista a buscar los pedidos.</small>
+          </label>
+          {msg && <p className={msg.ok ? "exito" : "error"} role="alert">{msg.texto}</p>}
+          <button disabled={ocupado || !clave.trim()}>{ocupado ? "Probando la clave…" : "Conectar"}</button>
+        </form>
+      )}
+    </div>
+  );
+}
 
 // ── PIN de supervisor ─────────────────────────────────────────
 // Con este PIN el administrador autoriza en la caja un descuento mayor al tope del cajero.
