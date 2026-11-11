@@ -12,7 +12,7 @@ import { pedir, type Sesion } from "./api";
 
 type Sucursal = { id: number; nombre: string };
 type Resumen = { cerradas: number; ventas: string; descuentos: string; propinas: string; total_cobrado: string; por_medio: Record<string, string>; devoluciones?: string; turnos_con_diferencia: { turno_id: number; diferencia: string }[] };
-type Mesa = { mesa_id: number; estado: "libre" | "ocupada" | "lista" | "cuenta_pedida" };
+type Mesa = { mesa_id: number; estado: "libre" | "ocupada" | "lista" | "cuenta_pedida"; cuenta_pedida?: boolean };
 type Alerta = { item_id: number; nombre: string; disponible: string; stock_minimo: string; se_produce: boolean; unidad: string };
 type Compras = { lineas: unknown[]; costo_total_estimado: string };
 type Item = { id: number; nombre: string; tipo: string; precio_venta: string | null; tiene_receta: boolean };
@@ -104,7 +104,7 @@ function Tablero({ local }: { local: number }) {
               <li className="e-libre"><b>{cuenta("libre")}</b> libres</li>
               <li className="e-ocupada"><b>{cuenta("ocupada")}</b> ocupadas</li>
               <li className="e-lista"><b>{cuenta("lista")}</b> con comida lista</li>
-              <li className="e-cuenta"><b>{cuenta("cuenta_pedida")}</b> piden la cuenta</li>
+              <li className="e-cuenta"><b>{(mesas ?? []).filter((m) => m.cuenta_pedida ?? m.estado === "cuenta_pedida").length}</b> piden la cuenta</li>
             </ul>
           )}
           {mesas && <p className="suave">{mesas.length} mesa(s) en total.</p>}

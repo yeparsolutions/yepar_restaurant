@@ -39,6 +39,9 @@ class EstadoMesa:
     ancho: int = 80
     alto: int = 80
     forma: str = "cuadrada"
+    # El estado muestra lo más urgente (un plato "lista" gana sobre la cuenta); este campo dice aparte
+    # si el cliente ya pidió la cuenta, para que la caja la vea aunque queden platos por entregar.
+    cuenta_pedida: bool = False
 
 
 def crear_mesa(db: Session, *, empresa_id: int, sucursal_id: int, nombre: str, capacidad: int = 4,
@@ -157,5 +160,6 @@ def estado_mesas(db: Session, *, empresa_id: int, sucursal_id: int) -> list:
             estado = CUENTA_PEDIDA
         else:
             estado = OCUPADA
-        resultado.append(EstadoMesa(mesa.id, mesa.nombre, estado, pedido.id, pedido.mesero_id, listas, **plano))
+        resultado.append(EstadoMesa(mesa.id, mesa.nombre, estado, pedido.id, pedido.mesero_id, listas,
+                                      cuenta_pedida=pedido.estado == EstadoPedido.cuenta_pedida, **plano))
     return resultado

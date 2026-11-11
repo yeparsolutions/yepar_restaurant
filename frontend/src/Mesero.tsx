@@ -19,6 +19,7 @@ export { nuevoId };
 type EstadoMesa = "libre" | "ocupada" | "lista" | "cuenta_pedida";
 type Mesa = {
   mesa_id: number; nombre: string; estado: EstadoMesa; pedido_id: string | null; lineas_listas: number;
+  cuenta_pedida?: boolean;
   capacidad: number | null; pos_x: number | null; pos_y: number | null; ancho: number | null; alto: number | null; forma: string | null;
 };
 type Opcion = { id: number; nombre: string; precio: string | null };
@@ -101,7 +102,7 @@ function mesasConPendientes(mesas: Mesa[], ops: Operacion[]): Mesa[] {
   for (const o of ops) {
     const d = o.datos as Record<string, any>;
     if (o.tipo === "abrir_pedido") m = m.map((x) => (x.mesa_id === d.mesa_id && !x.pedido_id ? { ...x, estado: "ocupada" as EstadoMesa, pedido_id: d.pedido_id } : x));
-    else if (o.tipo === "pedir_cuenta") m = m.map((x) => (x.pedido_id === d.pedido_id ? { ...x, estado: "cuenta_pedida" as EstadoMesa } : x));
+    else if (o.tipo === "pedir_cuenta") m = m.map((x) => (x.pedido_id === d.pedido_id ? { ...x, estado: "cuenta_pedida" as EstadoMesa, cuenta_pedida: true } : x));
     else if (o.tipo === "anular_pedido") m = m.map((x) => (x.pedido_id === d.pedido_id ? { ...x, estado: "libre" as EstadoMesa, pedido_id: null } : x));
   }
   return m;
